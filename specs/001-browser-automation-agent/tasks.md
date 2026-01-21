@@ -16,7 +16,7 @@
 
 ## Phase 2: Core Infrastructure
 
-- [ ] T006 [P] Implement LLMProvider abstraction (FR-027, FR-025)
+- [x] T006 [P] Implement LLMProvider abstraction (FR-027, FR-025)
 - [ ] T007 [P] Set up Claude Agent SDK integration (FR-025)
 - [ ] T008 [P] Define AgentDefinition patterns for Planner and sub-agents (FR-026)
 - [ ] T009 [depends on T006] Implement LLM provider with OpenAI-compatible API support

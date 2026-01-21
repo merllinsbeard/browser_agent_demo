@@ -11,8 +11,8 @@
 - [x] T001 [P] Initialize Python project structure with uv
 - [x] T002 [P] Create pyproject.toml with dependencies (playwright, anthropic, rich)
 - [x] T003 [P] Set up project directory structure (src/, tests/, configs/)
-- [ ] T004 [P] Create .env template for API keys and configuration
-- [ ] T005 [P] Initialize git repository with .gitignore
+- [x] T004 [P] Create .env template for API keys and configuration
+- [x] T005 [P] Initialize git repository with .gitignore
 
 ## Phase 2: Core Infrastructure
 

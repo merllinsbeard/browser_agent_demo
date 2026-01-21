@@ -135,30 +135,40 @@ Always:
     async def execute_task(
         self,
         task: str,
-        stream: bool = True,
-    ) -> Any:
+    ) -> list[Any]:
         """
-        Execute a browser automation task.
+        Execute a browser automation task and collect all results.
 
         Args:
             task: Natural language task description
-            stream: Whether to stream responses
 
         Returns:
-            Task execution result
+            List of task execution messages
         """
         await self.initialize()
 
-        if stream:
-            # Use streaming query
-            async for message in query(prompt=task, options=self._options):
-                yield message
-        else:
-            # Collect all messages
-            results = []
-            async for message in query(prompt=task, options=self._options):
-                results.append(message)
-            return results
+        results = []
+        async for message in query(prompt=task, options=self._options):
+            results.append(message)
+        return results
+
+    async def execute_task_stream(
+        self,
+        task: str,
+    ):
+        """
+        Execute a browser automation task with streaming.
+
+        Args:
+            task: Natural language task description
+
+        Yields:
+            Task execution messages as they arrive
+        """
+        await self.initialize()
+
+        async for message in query(prompt=task, options=self._options):
+            yield message
 
     async def close(self) -> None:
         """Close the orchestrator and release resources."""

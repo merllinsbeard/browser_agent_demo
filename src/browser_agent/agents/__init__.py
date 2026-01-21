@@ -47,6 +47,13 @@ from .reporter import (
     TaskReport,
     create_reporter,
 )
+from .task_decomposer import (
+    TaskDecomposer,
+    TaskPlan,
+    Subtask,
+    SubtaskStatus,
+    create_task_decomposer,
+)
 
 __all__ = [
     # Orchestrator
@@ -81,4 +88,10 @@ __all__ = [
     "ReportGenerator",
     "TaskReport",
     "create_reporter",
+    # Task Decomposer (T048)
+    "TaskDecomposer",
+    "TaskPlan",
+    "Subtask",
+    "SubtaskStatus",
+    "create_task_decomposer",
 ]

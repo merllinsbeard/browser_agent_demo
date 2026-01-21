@@ -40,6 +40,14 @@ from browser_agent.tui.result import (
     print_page_info,
     print_result,
 )
+from browser_agent.tui.progress import (
+    ActionProgress,
+    StepTracker,
+    action_spinner,
+    create_task_progress,
+    progress_indicator,
+    step_progress,
+)
 
 __all__ = [
     # Console infrastructure
@@ -67,4 +75,11 @@ __all__ = [
     "print_extracted_text",
     "print_page_info",
     "print_result",
+    # Progress indicators (T020)
+    "ActionProgress",
+    "StepTracker",
+    "action_spinner",
+    "create_task_progress",
+    "progress_indicator",
+    "step_progress",
 ]

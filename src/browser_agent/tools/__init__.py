@@ -17,15 +17,26 @@ from .navigation import (
     go_forward,
     reload_page,
 )
+from .accessibility import (
+    get_accessibility_tree,
+    find_interactive_elements,
+    get_page_text,
+)
 from .base import ToolResult, tool, get_tool, get_all_tools, get_tool_schemas
 
 __all__ = [
+    # Navigation
     "navigate",
     "navigate_tool",
     "get_current_url",
     "go_back",
     "go_forward",
     "reload_page",
+    # Accessibility
+    "get_accessibility_tree",
+    "find_interactive_elements",
+    "get_page_text",
+    # Base
     "ToolResult",
     "tool",
     "get_tool",

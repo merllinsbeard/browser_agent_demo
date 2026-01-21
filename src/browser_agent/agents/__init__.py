@@ -8,6 +8,7 @@ Implements the 4-agent hierarchy for browser automation:
 - Validator: Action verification (haiku tier)
 
 Uses Claude Agent SDK with AgentDefinition pattern (FR-025, FR-026).
+Implements ReAct loop pattern for reasoning-action cycles.
 """
 
 from .orchestrator import AgentOrchestrator, create_orchestrator
@@ -17,12 +18,25 @@ from .definitions import (
     EXECUTOR_AGENT,
     VALIDATOR_AGENT,
 )
+from .planner import (
+    ReActPlanner,
+    PlannerState,
+    PlannerConfig,
+    create_planner,
+)
 
 __all__ = [
+    # Orchestrator
     "AgentOrchestrator",
     "create_orchestrator",
+    # Agent definitions
     "PLANNER_AGENT",
     "DOM_ANALYZER_AGENT",
     "EXECUTOR_AGENT",
     "VALIDATOR_AGENT",
+    # ReAct Planner (T025)
+    "ReActPlanner",
+    "PlannerState",
+    "PlannerConfig",
+    "create_planner",
 ]

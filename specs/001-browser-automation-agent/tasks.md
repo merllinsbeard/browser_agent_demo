@@ -47,7 +47,7 @@
 
 ## Phase 6: Core Agent Logic (User Story 1 - P1)
 
-- [ ] T025 [depends on T008, T010] Create Planner agent with ReAct loop
+- [x] T025 [depends on T008, T010] Create Planner agent with ReAct loop
 - [ ] T026 [depends on T025] Implement DOM Analyzer sub-agent (haiku tier)
 - [ ] T027 [depends on T025] Implement Executor sub-agent (sonnet tier)
 - [ ] T028 [depends on T025] Create ContextWindow for sliding context (FR-018)

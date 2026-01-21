@@ -42,6 +42,11 @@ from .validator import (
     PageState,
     create_validator,
 )
+from .reporter import (
+    ReportGenerator,
+    TaskReport,
+    create_reporter,
+)
 
 __all__ = [
     # Orchestrator
@@ -72,4 +77,8 @@ __all__ = [
     "ValidationStatus",
     "PageState",
     "create_validator",
+    # Reporter (T035)
+    "ReportGenerator",
+    "TaskReport",
+    "create_reporter",
 ]

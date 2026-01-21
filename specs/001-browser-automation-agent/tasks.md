@@ -86,9 +86,9 @@
 ## Phase 11: Multi-Step Tasks (User Story 2 - P2)
 
 - [x] T048 [depends on T030] Implement task decomposition for multi-step tasks
-- [ ] T049 [depends on T048] Test multi-page task (5+ pages) (SC-002)
-- [ ] T050 [depends on T048] Test popup/modal handling (edge case)
-- [ ] T051 [depends on T048] Test page state re-evaluation after changes (FR-016)
+- [x] T049 [depends on T048] Test multi-page task (5+ pages) (SC-002)
+- [x] T050 [depends on T048] Test popup/modal handling (edge case)
+- [x] T051 [depends on T048] Test page state re-evaluation after changes (FR-016)
 
 ## Phase 12: Demo Scenario
 

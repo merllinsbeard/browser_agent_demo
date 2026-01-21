@@ -24,6 +24,13 @@ from browser_agent.tui.thought import (
     print_reasoning_chain,
     print_thought,
 )
+from browser_agent.tui.action import (
+    format_action_params,
+    print_action,
+    print_interaction,
+    print_navigation,
+    print_tool_call,
+)
 
 __all__ = [
     # Console infrastructure
@@ -37,4 +44,10 @@ __all__ = [
     "print_analysis",
     "print_reasoning_chain",
     "print_thought",
+    # Action block functions (FR-004)
+    "format_action_params",
+    "print_action",
+    "print_interaction",
+    "print_navigation",
+    "print_tool_call",
 ]

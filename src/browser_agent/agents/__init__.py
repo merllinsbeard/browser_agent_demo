@@ -24,6 +24,11 @@ from .planner import (
     PlannerConfig,
     create_planner,
 )
+from .dom_analyzer import (
+    DOMAnalyzer,
+    PageAnalysis,
+    create_dom_analyzer,
+)
 
 __all__ = [
     # Orchestrator
@@ -39,4 +44,8 @@ __all__ = [
     "PlannerState",
     "PlannerConfig",
     "create_planner",
+    # DOM Analyzer (T026)
+    "DOMAnalyzer",
+    "PageAnalysis",
+    "create_dom_analyzer",
 ]

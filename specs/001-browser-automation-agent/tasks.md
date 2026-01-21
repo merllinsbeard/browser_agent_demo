@@ -90,11 +90,14 @@
 - [x] T050 [depends on T048] Test popup/modal handling (edge case)
 - [x] T051 [depends on T048] Test page state re-evaluation after changes (FR-016)
 
-## Phase 12: Demo Scenario
+## Phase 12: Demo Scenario (N/A - Requires Manual Execution)
 
-- [ ] T052 [depends on T049] Test complete food ordering flow on Yandex.Eda (SC-008)
-- [ ] T053 [depends on T052] Record demo video of food ordering task
-- [ ] T054 [depends on T052] Verify all success criteria met
+- [x] T052 [N/A] Test complete food ordering flow on Yandex.Eda (SC-008)
+  - Skipped: Requires external service, real account, real payment (blocked by FR-022)
+- [x] T053 [N/A] Record demo video of food ordering task
+  - Skipped: Manual task requiring human recording
+- [x] T054 [N/A] Verify all success criteria met
+  - Skipped: Depends on T052; core implementation verified via 14 integration tests
 
 ## Phase 13: Documentation & Polish
 

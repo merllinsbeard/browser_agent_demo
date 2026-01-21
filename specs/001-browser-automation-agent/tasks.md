@@ -40,10 +40,10 @@
 
 ## Phase 5: Basic Interaction Tools
 
-- [ ] T021 [depends on T013] Implement click tool with natural language element description (FR-007)
-- [ ] T022 [depends on T013] Implement type text tool (FR-008)
-- [ ] T023 [depends on T011] Implement scroll tool (FR-009)
-- [ ] T024 [depends on T021, T022, T023] Register all tools with @tool decorator and schema
+- [x] T021 [depends on T013] Implement click tool with natural language element description (FR-007)
+- [x] T022 [depends on T013] Implement type text tool (FR-008)
+- [x] T023 [depends on T011] Implement scroll tool (FR-009)
+- [x] T024 [depends on T021, T022, T023] Register all tools with @tool decorator and schema
 
 ## Phase 6: Core Agent Logic (User Story 1 - P1)
 

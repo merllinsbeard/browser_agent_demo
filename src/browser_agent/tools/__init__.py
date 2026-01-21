@@ -34,6 +34,13 @@ from .wait import (
     wait_for_url,
     sleep,
 )
+from .interactions import (
+    click,
+    type_text,
+    scroll,
+    hover,
+    select_option,
+)
 from .base import ToolResult, tool, get_tool, get_all_tools, get_tool_schemas
 
 __all__ = [
@@ -58,6 +65,12 @@ __all__ = [
     "wait_for_text",
     "wait_for_url",
     "sleep",
+    # Interactions (FR-007, FR-008, FR-009)
+    "click",
+    "type_text",
+    "scroll",
+    "hover",
+    "select_option",
     # Base
     "ToolResult",
     "tool",

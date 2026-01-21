@@ -25,7 +25,7 @@
 ## Phase 3: Browser Automation Foundation
 
 - [x] T011 [depends on T003] Initialize Playwright browser instance (visible mode) (FR-001)
-- [ ] T012 [depends on T011] Implement page navigation tool (FR-006)
+- [x] T012 [depends on T011] Implement page navigation tool (FR-006)
 - [ ] T013 [depends on T011] Implement Accessibility Tree extraction (FR-011)
 - [ ] T014 [depends on T011] Implement screenshot capture as fallback (FR-012)
 - [ ] T015 [depends on T011] Implement wait/load conditions (FR-010)

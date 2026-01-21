@@ -35,6 +35,13 @@ from .executor import (
     ExecutionContext,
     create_executor,
 )
+from .validator import (
+    ActionValidator,
+    ValidationResult,
+    ValidationStatus,
+    PageState,
+    create_validator,
+)
 
 __all__ = [
     # Orchestrator
@@ -59,4 +66,10 @@ __all__ = [
     "ExecutionResult",
     "ExecutionContext",
     "create_executor",
+    # Validator (T032, T034)
+    "ActionValidator",
+    "ValidationResult",
+    "ValidationStatus",
+    "PageState",
+    "create_validator",
 ]

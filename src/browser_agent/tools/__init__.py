@@ -27,6 +27,13 @@ from .screenshot import (
     save_screenshot,
     get_viewport_info,
 )
+from .wait import (
+    wait_for_load,
+    wait_for_selector,
+    wait_for_text,
+    wait_for_url,
+    sleep,
+)
 from .base import ToolResult, tool, get_tool, get_all_tools, get_tool_schemas
 
 __all__ = [
@@ -45,6 +52,12 @@ __all__ = [
     "screenshot",
     "save_screenshot",
     "get_viewport_info",
+    # Wait
+    "wait_for_load",
+    "wait_for_selector",
+    "wait_for_text",
+    "wait_for_url",
+    "sleep",
     # Base
     "ToolResult",
     "tool",

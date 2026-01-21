@@ -5,9 +5,9 @@ Native implementation for Anthropic's Claude API.
 Uses the Anthropic Python SDK for optimal integration.
 """
 
-import asyncio
 from typing import List, Any, Optional, AsyncIterator
-from anthropic import AsyncAnthropic, AsyncMessage, AsyncStream
+from anthropic import AsyncAnthropic, AsyncStream
+from anthropic.types import Message as AnthropicMessage
 
 from .provider import (
     LLMProvider,
@@ -86,7 +86,7 @@ class AnthropicProvider(LLMProvider):
             params["system"] = system_message
 
         # Make the API call
-        response: AsyncMessage = await self._client.messages.create(**params)
+        response: AnthropicMessage = await self._client.messages.create(**params)
 
         # Extract the content
         content = response.content[0].text if response.content else ""

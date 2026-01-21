@@ -9,7 +9,7 @@ Implements FR-027: OpenAI-compatible API abstraction.
 
 from typing import List, Any, Optional, AsyncIterator
 import httpx
-from httpx import AsyncTimeoutException
+from httpx import TimeoutException
 
 from .provider import (
     LLMProvider,
@@ -100,7 +100,7 @@ class OpenAICompatibleProvider(LLMProvider):
                 stop_reason=data["choices"][0].get("finish_reason"),
             )
 
-        except AsyncTimeoutException:
+        except TimeoutException:
             raise TimeoutError(f"LLM request timed out after {self.config.timeout}s")
         except httpx.HTTPStatusError as e:
             raise RuntimeError(f"LLM API error: {e.response.status_code} - {e.response.text}")
@@ -165,7 +165,7 @@ class OpenAICompatibleProvider(LLMProvider):
                             # Skip malformed SSE data
                             continue
 
-        except AsyncTimeoutException:
+        except TimeoutException:
             raise TimeoutError(f"LLM request timed out after {self.config.timeout}s")
         except httpx.HTTPStatusError as e:
             raise RuntimeError(f"LLM API error: {e.response.status_code} - {e.response.text}")

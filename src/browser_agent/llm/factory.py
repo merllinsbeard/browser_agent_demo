@@ -9,7 +9,7 @@ import os
 from typing import Optional
 from dotenv import load_dotenv
 
-from .provider import LLMConfig, ModelTier
+from .provider import LLMConfig, LLMProvider, ModelTier
 from .anthropic_provider import AnthropicProvider
 from .openai_compatible_provider import OpenAICompatibleProvider
 
@@ -17,7 +17,7 @@ from .openai_compatible_provider import OpenAICompatibleProvider
 load_dotenv()
 
 
-def create_provider_from_env() -> Optional["AnthropicProvider" | "OpenAICompatibleProvider"]:
+def create_provider_from_env() -> LLMProvider:
     """
     Create an LLM provider instance from environment variables.
 
@@ -83,7 +83,7 @@ def create_provider(
     model: str = "claude-sonnet-4-20250514",
     tier_models: Optional[dict[ModelTier, str]] = None,
     **kwargs,
-) -> "AnthropicProvider" | "OpenAICompatibleProvider":
+) -> LLMProvider:
     """
     Create an LLM provider with explicit configuration.
 

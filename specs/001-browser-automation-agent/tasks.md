@@ -77,11 +77,11 @@
 
 ## Phase 10: Integration & Testing
 
-- [ ] T043 [depends on T030] Test simple navigation task (User Story 1 acceptance scenario 1)
-- [ ] T044 [depends on T043] Test Wikipedia search task (User Story 1 acceptance scenario 1)
-- [ ] T045 [depends on T043] Test data extraction from arbitrary page (User Story 1 acceptance scenario 2)
-- [ ] T046 [depends on T043] Verify TUI shows all actions in real-time (FR-006, SC-006)
-- [ ] T047 [depends on T043] Measure time to first action < 5 seconds (SC-003)
+- [x] T043 [depends on T030] Test simple navigation task (User Story 1 acceptance scenario 1)
+- [x] T044 [depends on T043] Test Wikipedia search task (User Story 1 acceptance scenario 1)
+- [x] T045 [depends on T043] Test data extraction from arbitrary page (User Story 1 acceptance scenario 2)
+- [x] T046 [depends on T043] Verify TUI shows all actions in real-time (FR-006, SC-006)
+- [x] T047 [depends on T043] Measure time to first action < 5 seconds (SC-003)
 
 ## Phase 11: Multi-Step Tasks (User Story 2 - P2)
 

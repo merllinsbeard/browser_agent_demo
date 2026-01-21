@@ -71,9 +71,9 @@
 
 ## Phase 9: Session Management (User Story 4 - P4)
 
-- [ ] T040 [depends on T011] Implement browser session persistence (FR-023)
-- [ ] T041 [depends on T040] Add manual login detection and user prompt (FR-024)
-- [ ] T042 [depends on T040] Create session storage directory
+- [x] T040 [depends on T011] Implement browser session persistence (FR-023)
+- [x] T041 [depends on T040] Add manual login detection and user prompt (FR-024)
+- [x] T042 [depends on T040] Create session storage directory
 
 ## Phase 10: Integration & Testing
 

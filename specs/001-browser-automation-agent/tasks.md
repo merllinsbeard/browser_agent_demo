@@ -49,7 +49,7 @@
 
 - [x] T025 [depends on T008, T010] Create Planner agent with ReAct loop
 - [x] T026 [depends on T025] Implement DOM Analyzer sub-agent (haiku tier)
-- [ ] T027 [depends on T025] Implement Executor sub-agent (sonnet tier)
+- [x] T027 [depends on T025] Implement Executor sub-agent (sonnet tier)
 - [ ] T028 [depends on T025] Create ContextWindow for sliding context (FR-018)
 - [ ] T029 [depends on T025] Implement task parsing from natural language (FR-014)
 - [ ] T030 [depends on T025] Implement action sequence determination (FR-015)

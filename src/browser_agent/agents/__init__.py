@@ -29,6 +29,12 @@ from .dom_analyzer import (
     PageAnalysis,
     create_dom_analyzer,
 )
+from .executor import (
+    BrowserExecutor,
+    ExecutionResult,
+    ExecutionContext,
+    create_executor,
+)
 
 __all__ = [
     # Orchestrator
@@ -48,4 +54,9 @@ __all__ = [
     "DOMAnalyzer",
     "PageAnalysis",
     "create_dom_analyzer",
+    # Executor (T027)
+    "BrowserExecutor",
+    "ExecutionResult",
+    "ExecutionContext",
+    "create_executor",
 ]

@@ -50,15 +50,15 @@
 - [x] T025 [depends on T008, T010] Create Planner agent with ReAct loop
 - [x] T026 [depends on T025] Implement DOM Analyzer sub-agent (haiku tier)
 - [x] T027 [depends on T025] Implement Executor sub-agent (sonnet tier)
-- [ ] T028 [depends on T025] Create ContextWindow for sliding context (FR-018)
-- [ ] T029 [depends on T025] Implement task parsing from natural language (FR-014)
-- [ ] T030 [depends on T025] Implement action sequence determination (FR-015)
+- [x] T028 [depends on T025] Create ContextWindow for sliding context (FR-018)
+- [x] T029 [depends on T025] Implement task parsing from natural language (FR-014)
+- [x] T030 [depends on T025] Implement action sequence determination (FR-015)
 
 ## Phase 7: Error Handling & Adaptation
 
-- [ ] T031 [depends on T025] Implement retry logic for temporary errors (FR-028)
+- [x] T031 [depends on T025] Implement retry logic for temporary errors (FR-028)
 - [ ] T032 [depends on T025] Implement CAPTCHA detection and user notification (FR-029)
-- [ ] T033 [depends on T025] Implement iteration limit (15 iterations) (FR-030)
+- [x] T033 [depends on T025] Implement iteration limit (15 iterations) (FR-030)
 - [ ] T034 [depends on T025] Implement page change adaptation (FR-016)
 - [ ] T035 [depends on T025] Generate completion report (FR-017)
 

@@ -27,7 +27,7 @@
 - [x] T011 [depends on T003] Initialize Playwright browser instance (visible mode) (FR-001)
 - [x] T012 [depends on T011] Implement page navigation tool (FR-006)
 - [x] T013 [depends on T011] Implement Accessibility Tree extraction (FR-011)
-- [ ] T014 [depends on T011] Implement screenshot capture as fallback (FR-012)
+- [x] T014 [depends on T011] Implement screenshot capture as fallback (FR-012)
 - [ ] T015 [depends on T011] Implement wait/load conditions (FR-010)
 
 ## Phase 4: Rich TUI Interface

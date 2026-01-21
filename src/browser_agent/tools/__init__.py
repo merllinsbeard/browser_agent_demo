@@ -22,6 +22,11 @@ from .accessibility import (
     find_interactive_elements,
     get_page_text,
 )
+from .screenshot import (
+    screenshot,
+    save_screenshot,
+    get_viewport_info,
+)
 from .base import ToolResult, tool, get_tool, get_all_tools, get_tool_schemas
 
 __all__ = [
@@ -36,6 +41,10 @@ __all__ = [
     "get_accessibility_tree",
     "find_interactive_elements",
     "get_page_text",
+    # Screenshot
+    "screenshot",
+    "save_screenshot",
+    "get_viewport_info",
     # Base
     "ToolResult",
     "tool",

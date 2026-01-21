@@ -64,10 +64,10 @@
 
 ## Phase 8: Security Layer (User Story 3 - P3)
 
-- [ ] T036 [depends on T025] Implement destructive action detection (FR-019, FR-020, FR-021)
-- [ ] T037 [depends on T036] Create UserConfirmation flow
-- [ ] T038 [depends on T037] Implement confirmation UI in terminal
-- [ ] T039 [depends on T036] Block password automation (FR-022)
+- [x] T036 [depends on T025] Implement destructive action detection (FR-019, FR-020, FR-021)
+- [x] T037 [depends on T036] Create UserConfirmation flow
+- [x] T038 [depends on T037] Implement confirmation UI in terminal
+- [x] T039 [depends on T036] Block password automation (FR-022)
 
 ## Phase 9: Session Management (User Story 4 - P4)
 

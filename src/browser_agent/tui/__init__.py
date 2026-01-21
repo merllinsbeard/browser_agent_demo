@@ -31,6 +31,15 @@ from browser_agent.tui.action import (
     print_navigation,
     print_tool_call,
 )
+from browser_agent.tui.result import (
+    print_code_result,
+    print_completion,
+    print_data_result,
+    print_error,
+    print_extracted_text,
+    print_page_info,
+    print_result,
+)
 
 __all__ = [
     # Console infrastructure
@@ -50,4 +59,12 @@ __all__ = [
     "print_interaction",
     "print_navigation",
     "print_tool_call",
+    # Result block functions (FR-005)
+    "print_code_result",
+    "print_completion",
+    "print_data_result",
+    "print_error",
+    "print_extracted_text",
+    "print_page_info",
+    "print_result",
 ]

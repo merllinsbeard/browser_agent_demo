@@ -146,8 +146,8 @@ class SessionManager:
                     has_password_field = True
                     break
 
-        if not has_password_field and not self.is_login_page(url, page_title):
-            return True  # Not actually a login page
+        if not has_password_field:
+            return True  # No password field found, skip login prompt
 
         # Prompt user for manual login
         print_action(

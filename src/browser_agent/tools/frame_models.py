@@ -11,8 +11,8 @@ Feature: 002-iframe-interaction-fixes
 Date: 2026-01-22
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional, Any
 
 
 class FrameContext(BaseModel):
@@ -57,7 +57,10 @@ class FrameLocatorResult(BaseModel):
     Validation Rules:
     - confidence_score must be between 0.0 and 1.0
     - frame_context is None only when found is False
+    - locator is the Playwright Locator object (stored as Any to avoid Pydantic issues)
     """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     found: bool
     """Whether element was found."""
@@ -65,10 +68,13 @@ class FrameLocatorResult(BaseModel):
     frame_context: Optional[FrameContext] = None
     """Frame where element was found."""
 
-    locator_description: str
+    locator: Optional[Any] = None
+    """Playwright Locator object for the found element."""
+
+    locator_description: Optional[str] = None
     """Description used to find element."""
 
-    search_strategy: str
+    search_strategy: Optional[str] = None
     """Strategy that succeeded (e.g., "get_by_role", "get_by_text")."""
 
     confidence_score: float = Field(ge=0.0, le=1.0, default=1.0)

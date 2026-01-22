@@ -61,7 +61,7 @@
 ### Implementation for User Story 1
 
 - [x] T011 [US1] Add optional frame_selector parameter to _find_element_by_description() in src/browser_agent/tools/interactions.py
-- [ ] T012 [US1] Implement _find_element_in_all_frames() utility that searches main frame then iframes (FR-004, FR-010) in src/browser_agent/tools/interactions.py
+- [x] T012 [US1] Implement _find_element_in_all_frames() utility that searches main frame then iframes (FR-004, FR-010) in src/browser_agent/tools/interactions.py
 - [ ] T013 [US1] Enhance type_text tool with frame parameter and auto-search (FR-014) in src/browser_agent/tools/interactions.py
 - [ ] T014 [US1] Add frame_context to ToolResult.data for all successful interactions (FR-011) in src/browser_agent/tools/interactions.py
 - [ ] T015 [US1] Add frame context switch logging (FR-016) in src/browser_agent/tools/interactions.py

@@ -5,12 +5,22 @@ Implements user interaction tools for the browser automation agent:
 - FR-007: Click with natural language element description
 - FR-008: Type text into fields
 - FR-009: Scroll the page
+- FR-004, FR-010: Element search across all frames (iframes)
 """
 
+import logging
 from typing import Literal, Optional, Union
 from playwright.async_api import Page, Frame, Locator
 
 from .base import tool, ToolResult
+from .frame_models import FrameContext, FrameLocatorResult
+from .frames import (
+    _prioritize_frames,
+    _extract_frame_context,
+    _check_frame_accessible,
+)
+
+logger = logging.getLogger(__name__)
 
 
 async def _find_element_by_description(
@@ -143,6 +153,102 @@ def _find_matching_names_from_yaml(
                 found.append(name)
 
     return found
+
+
+async def _find_element_in_all_frames(
+    page: Page,
+    description: str,
+    role: Optional[str] = None,
+) -> FrameLocatorResult:
+    """
+    Find an element across all frames (main frame and iframes).
+
+    Searches frames in priority order: main frame first, then iframes
+    sorted by semantic labels (aria-label > title > name > none).
+
+    Implements FR-004 (element search across frames) and FR-010 (iframe fallback).
+
+    Args:
+        page: Playwright Page instance
+        description: Natural language description of the element
+        role: Optional ARIA role to filter by
+
+    Returns:
+        FrameLocatorResult with:
+        - found: True if element was found
+        - frame_context: FrameContext of the frame containing the element
+        - locator: Playwright Locator for the element
+        - search_strategy: Strategy that found the element
+        - locator_description: The description used to find the element
+
+    Examples:
+        >>> result = await _find_element_in_all_frames(page, "Search input")
+        >>> if result.found:
+        ...     await result.locator.fill("test query")
+        ...     print(f"Found in frame {result.frame_context.index}")
+    """
+    # Build frame contexts for all frames
+    frame_contexts: list[FrameContext] = []
+    for index, frame in enumerate(page.frames):
+        frame_context = await _extract_frame_context(frame, index, page)
+        frame_context.accessible = await _check_frame_accessible(frame)
+        frame_contexts.append(frame_context)
+
+    # Prioritize frames for search order
+    prioritized_frames = _prioritize_frames(frame_contexts, include_inaccessible=False)
+
+    logger.debug(
+        f"Searching for '{description}' across {len(prioritized_frames)} accessible frames "
+        f"(total: {len(page.frames)})"
+    )
+
+    # Search each frame in priority order
+    searched_frames = []
+    for frame_context in prioritized_frames:
+        frame = page.frames[frame_context.index]
+        searched_frames.append(frame_context.index)
+
+        logger.debug(
+            f"Searching frame {frame_context.index} "
+            f"(name: {frame_context.name}, aria_label: {frame_context.aria_label})"
+        )
+
+        try:
+            locator, error = await _find_element_by_description(
+                frame, description, role
+            )
+
+            if locator is not None:
+                logger.debug(
+                    f"Element '{description}' found in frame {frame_context.index}"
+                )
+                return FrameLocatorResult(
+                    found=True,
+                    frame_context=frame_context,
+                    locator=locator,
+                    locator_description=description,
+                    search_strategy="prioritized_frame_search",
+                    confidence_score=1.0 if frame_context.index == 0 else 0.9,
+                )
+        except Exception as e:
+            logger.debug(
+                f"Error searching frame {frame_context.index}: {e}"
+            )
+            continue
+
+    # Element not found in any frame
+    logger.debug(
+        f"Element '{description}' not found in any frame "
+        f"(searched frames: {searched_frames})"
+    )
+    return FrameLocatorResult(
+        found=False,
+        frame_context=None,
+        locator=None,
+        locator_description=description,
+        search_strategy="prioritized_frame_search",
+        confidence_score=0.0,
+    )
 
 
 @tool(

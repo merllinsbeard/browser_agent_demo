@@ -78,7 +78,7 @@
 
 ### Tests for User Story 2
 
-- [ ] T016 [P] [US2] Integration test for click interception handling in tests/integration/test_iframes.py::test_click_iframe_interception
+- [x] T016 [P] [US2] Integration test for click interception handling in tests/integration/test_iframes.py::test_click_iframe_interception
 - [ ] T017 [P] [US2] Unit test for coordinate_click fallback in tests/unit/test_frame_tools.py::test_coordinate_click
 
 ### Implementation for User Story 2

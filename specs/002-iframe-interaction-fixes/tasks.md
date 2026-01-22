@@ -27,7 +27,7 @@
 
 - [x] T001 Create Pydantic models (FrameContext, FrameLocatorResult, InteractionAttempt, RetryChain) in src/browser_agent/tools/frame_models.py
 - [x] T002 [P] Create frames.py module skeleton with @tool decorator imports in src/browser_agent/tools/frames.py
-- [ ] T003 [P] Create test directory structure: tests/integration/test_iframes.py and tests/unit/test_frame_tools.py
+- [x] T003 [P] Create test directory structure: tests/integration/test_iframes.py and tests/unit/test_frame_tools.py
 
 ---
 

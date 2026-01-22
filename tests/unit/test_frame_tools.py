@@ -84,10 +84,224 @@ class TestFrameModels:
 class TestFindElementInAllFrames:
     """Test _find_element_in_all_frames utility (T010)."""
 
-    def test_find_element_all_frames(self):
-        """Test element search across main frame and iframes."""
-        # Implementation in T010
-        pytest.skip("Test implementation in T010")
+    @pytest.mark.asyncio
+    async def test_find_element_in_main_frame(self):
+        """Test element found in main frame when element exists there."""
+        from browser_agent.tools.interactions import _find_element_in_all_frames
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with element in main frame
+            await page.set_content("""
+                <html>
+                <body>
+                    <input type="text" aria-label="Search input" placeholder="Search..." />
+                </body>
+                </html>
+            """)
+
+            # Search for element
+            result = await _find_element_in_all_frames(page, "Search input")
+
+            # Verify element found in main frame
+            assert result.found is True
+            assert result.frame_context is not None
+            assert result.frame_context.index == 0  # Main frame
+            assert result.locator is not None
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_find_element_in_iframe(self):
+        """Test element found in iframe when not in main frame."""
+        from browser_agent.tools.interactions import _find_element_in_all_frames
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with iframe containing the element
+            await page.set_content("""
+                <html>
+                <body>
+                    <p>Main page content</p>
+                    <iframe id="search-widget" name="search-frame" aria-label="Search Widget"></iframe>
+                    <script>
+                        const iframe = document.getElementById('search-widget');
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write('<html><body><input type="search" aria-label="Search input" placeholder="Search..."/></body></html>');
+                        doc.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Search for element
+            result = await _find_element_in_all_frames(page, "Search input")
+
+            # Verify element found in iframe
+            assert result.found is True
+            assert result.frame_context is not None
+            assert result.frame_context.name == "search-frame"
+            assert result.frame_context.index > 0  # Not main frame
+            assert result.locator is not None
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_frame_prioritization_order(self):
+        """Test frames are searched in priority order (main -> semantic -> non-semantic)."""
+        from browser_agent.tools.interactions import _find_element_in_all_frames
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with multiple iframes, element in main frame
+            await page.set_content("""
+                <html>
+                <body>
+                    <input type="text" aria-label="Search box" />
+                    <iframe name="frame1" title="Frame 1"></iframe>
+                    <iframe name="frame2" aria-label="Important Frame"></iframe>
+                    <script>
+                        // Inject content into frame1
+                        const f1 = document.getElementsByName('frame1')[0];
+                        const d1 = f1.contentDocument || f1.contentWindow.document;
+                        d1.open();
+                        d1.write('<html><body><input aria-label="Search box"/></body></html>');
+                        d1.close();
+
+                        // Inject content into frame2
+                        const f2 = document.getElementsByName('frame2')[0];
+                        const d2 = f2.contentDocument || f2.contentWindow.document;
+                        d2.open();
+                        d2.write('<html><body><input aria-label="Search box"/></body></html>');
+                        d2.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Search for element
+            result = await _find_element_in_all_frames(page, "Search box")
+
+            # Verify main frame is searched first (should find there)
+            assert result.found is True
+            assert result.frame_context.index == 0  # Main frame
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_element_not_found(self):
+        """Test returns not found when element doesn't exist in any frame."""
+        from browser_agent.tools.interactions import _find_element_in_all_frames
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page without the target element
+            await page.set_content("""
+                <html>
+                <body>
+                    <p>Some content</p>
+                </body>
+                </html>
+            """)
+
+            # Search for non-existent element
+            result = await _find_element_in_all_frames(page, "Non-existent input")
+
+            # Verify not found
+            assert result.found is False
+            assert result.frame_context is None
+            assert result.locator is None
+            assert result.search_strategy is not None
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_cross_origin_frame_handling(self):
+        """Test cross-origin frames are skipped gracefully."""
+        from browser_agent.tools.interactions import _find_element_in_all_frames
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with same-origin element and cross-origin iframe reference
+            await page.set_content("""
+                <html>
+                <body>
+                    <input type="text" aria-label="Search input" />
+                    <iframe src="https://example.com/external" name="external-frame"></iframe>
+                </body>
+                </html>
+            """)
+
+            # Search for element
+            result = await _find_element_in_all_frames(page, "Search input")
+
+            # Verify element found in main frame despite cross-origin iframe
+            assert result.found is True
+            assert result.frame_context.index == 0
+            assert result.locator is not None
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_semantic_frame_priority(self):
+        """Test aria-label frames have higher priority than non-semantic frames."""
+        from browser_agent.tools.interactions import _find_element_in_all_frames
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page where element is in aria-labeled iframe
+            await page.set_content("""
+                <html>
+                <body>
+                    <iframe name="plain-frame"></iframe>
+                    <iframe name="search-frame" aria-label="Search Widget"></iframe>
+                    <script>
+                        // Element in plain frame
+                        const f1 = document.getElementsByName('plain-frame')[0];
+                        const d1 = f1.contentDocument || f1.contentWindow.document;
+                        d1.open();
+                        d1.write('<html><body><input aria-label="Search box"/></body></html>');
+                        d1.close();
+
+                        // Element in semantic frame
+                        const f2 = document.getElementsByName('search-frame')[0];
+                        const d2 = f2.contentDocument || f2.contentWindow.document;
+                        d2.open();
+                        d2.write('<html><body><input aria-label="Search box"/></body></html>');
+                        d2.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Search for element
+            result = await _find_element_in_all_frames(page, "Search box")
+
+            # Verify semantic frame is prioritized (should find there first)
+            assert result.found is True
+            assert result.frame_context.aria_label == "Search Widget"
+            assert result.frame_context.name == "search-frame"
+
+            await browser.close()
 
 
 class TestCoordinateClick:

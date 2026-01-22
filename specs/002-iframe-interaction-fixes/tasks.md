@@ -56,7 +56,7 @@
 ### Tests for User Story 1
 
 - [x] T009 [P] [US1] Integration test for iframe search flow in tests/integration/test_iframes.py::test_search_in_iframe
-- [ ] T010 [P] [US1] Unit test for _find_element_in_all_frames in tests/unit/test_frame_tools.py::test_find_element_all_frames
+- [x] T010 [P] [US1] Unit test for _find_element_in_all_frames in tests/unit/test_frame_tools.py::test_find_element_all_frames
 
 ### Implementation for User Story 1
 

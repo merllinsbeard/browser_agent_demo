@@ -7,14 +7,14 @@ Implements user interaction tools for the browser automation agent:
 - FR-009: Scroll the page
 """
 
-from typing import Literal, Optional
-from playwright.async_api import Page, Locator
+from typing import Literal, Optional, Union
+from playwright.async_api import Page, Frame, Locator
 
 from .base import tool, ToolResult
 
 
 async def _find_element_by_description(
-    page: Page,
+    page_or_frame: Union[Page, Frame],
     description: str,
     role: Optional[str] = None,
 ) -> tuple[Optional[Locator], Optional[str]]:
@@ -25,7 +25,7 @@ async def _find_element_by_description(
     accessible name, role, or text content.
 
     Args:
-        page: Playwright Page instance
+        page_or_frame: Playwright Page or Frame instance (supports iframe search)
         description: Natural language description of the element
         role: Optional ARIA role to filter by
 
@@ -37,7 +37,7 @@ async def _find_element_by_description(
     # Strategy 1: Try getByRole with name if role is specified
     if role:
         try:
-            locator = page.get_by_role(role, name=description)
+            locator = page_or_frame.get_by_role(role, name=description)
             if await locator.count() > 0:
                 return locator.first, None
         except Exception:
@@ -47,7 +47,7 @@ async def _find_element_by_description(
     common_roles = ["button", "link", "textbox", "checkbox", "radio", "combobox"]
     for r in common_roles:
         try:
-            locator = page.get_by_role(r, name=description)
+            locator = page_or_frame.get_by_role(r, name=description)
             if await locator.count() > 0:
                 return locator.first, None
         except Exception:
@@ -55,7 +55,7 @@ async def _find_element_by_description(
 
     # Strategy 3: Try getByText for text content match
     try:
-        locator = page.get_by_text(description, exact=False)
+        locator = page_or_frame.get_by_text(description, exact=False)
         if await locator.count() > 0:
             return locator.first, None
     except Exception:
@@ -63,7 +63,7 @@ async def _find_element_by_description(
 
     # Strategy 4: Try getByLabel for form fields
     try:
-        locator = page.get_by_label(description)
+        locator = page_or_frame.get_by_label(description)
         if await locator.count() > 0:
             return locator.first, None
     except Exception:
@@ -71,7 +71,7 @@ async def _find_element_by_description(
 
     # Strategy 5: Try getByPlaceholder for inputs
     try:
-        locator = page.get_by_placeholder(description)
+        locator = page_or_frame.get_by_placeholder(description)
         if await locator.count() > 0:
             return locator.first, None
     except Exception:
@@ -79,7 +79,7 @@ async def _find_element_by_description(
 
     # Strategy 6: Try getByTitle
     try:
-        locator = page.get_by_title(description)
+        locator = page_or_frame.get_by_title(description)
         if await locator.count() > 0:
             return locator.first, None
     except Exception:
@@ -87,21 +87,21 @@ async def _find_element_by_description(
 
     # Strategy 7: Try getByAltText for images
     try:
-        locator = page.get_by_alt_text(description)
+        locator = page_or_frame.get_by_alt_text(description)
         if await locator.count() > 0:
             return locator.first, None
     except Exception:
         pass
 
-    # Strategy 8: Partial text matching in accessibility snapshot
+    # Strategy 8: Partial text matching in accessibility snapshot (using modern aria_snapshot)
     try:
-        snapshot = await page.accessibility.snapshot(interesting_only=True)
-        if snapshot:
-            matching_names = _find_matching_names(snapshot, description_lower)
+        yaml_snapshot = await page_or_frame.locator("body").aria_snapshot()
+        if yaml_snapshot:
+            matching_names = _find_matching_names_from_yaml(yaml_snapshot, description_lower)
             for name in matching_names:
                 for r in common_roles:
                     try:
-                        locator = page.get_by_role(r, name=name)
+                        locator = page_or_frame.get_by_role(r, name=name)
                         if await locator.count() > 0:
                             return locator.first, None
                     except Exception:
@@ -112,31 +112,35 @@ async def _find_element_by_description(
     return None, f"Could not find element matching: '{description}'"
 
 
-def _find_matching_names(
-    node: dict,
+def _find_matching_names_from_yaml(
+    yaml_str: str,
     search_term: str,
-    found: Optional[list[str]] = None,
 ) -> list[str]:
     """
-    Find accessible names in tree that match search term.
+    Find accessible names in aria_snapshot YAML that match search term.
+
+    The aria_snapshot() returns YAML like:
+        - heading "todos"
+        - textbox "What needs to be done?"
+        - button "Submit"
 
     Args:
-        node: Accessibility tree node
+        yaml_str: YAML string from aria_snapshot()
         search_term: Lowercase search term
-        found: Accumulated matches
 
     Returns:
         List of matching names
     """
-    if found is None:
-        found = []
+    import re
 
-    name = node.get("name", "")
-    if name and search_term in name.lower():
-        found.append(name)
-
-    for child in node.get("children", []):
-        _find_matching_names(child, search_term, found)
+    found = []
+    for line in yaml_str.strip().split('\n'):
+        # Extract name from YAML line: - role "name"
+        match = re.search(r'"([^"]+)"', line)
+        if match:
+            name = match.group(1)
+            if name and search_term in name.lower():
+                found.append(name)
 
     return found
 

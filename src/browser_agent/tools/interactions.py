@@ -836,3 +836,92 @@ async def select_option(
             error=f"Select failed: {e!s}",
             metadata={"description": element_description, "option": option},
         )
+
+
+async def coordinate_click(
+    page: Page,
+    locator: Locator,
+    frame: Optional[Frame] = None,
+) -> ToolResult:
+    """
+    Click at the center coordinates of an element using page.mouse.click.
+
+    This is a fallback click method (FR-024) used when standard click() fails
+    due to iframe overlays or other interception issues. It calculates the
+    center point of the element's bounding box and performs a raw mouse click.
+
+    Args:
+        page: Playwright Page instance
+        locator: Playwright Locator for the target element
+        frame: Optional Frame if the element is inside an iframe
+
+    Returns:
+        ToolResult with:
+        - success: True if click succeeded
+        - data.method: "coordinate_click"
+        - data.center_x: X coordinate of click
+        - data.center_y: Y coordinate of click
+        - error: Message if click failed (e.g., hidden element)
+
+    Examples:
+        >>> button = page.locator("#submit-btn")
+        >>> result = await coordinate_click(page, button)
+        >>> if result.success:
+        ...     print(f"Clicked at ({result.data['center_x']}, {result.data['center_y']})")
+    """
+    try:
+        # First check if element has a bounding box (fails fast for hidden elements)
+        bounding_box = await locator.bounding_box()
+
+        if bounding_box is None:
+            return ToolResult(
+                success=False,
+                error="Element has no bounding box (may be hidden or not rendered)",
+                metadata={"method": "coordinate_click"},
+            )
+
+        # Scroll element into view if needed (handles elements outside viewport)
+        await locator.scroll_into_view_if_needed()
+
+        # Get updated bounding box after scrolling (position may have changed)
+        bounding_box = await locator.bounding_box()
+
+        if bounding_box is None:
+            return ToolResult(
+                success=False,
+                error="Element has no bounding box after scrolling",
+                metadata={"method": "coordinate_click"},
+            )
+
+        # Calculate center coordinates
+        center_x = bounding_box["x"] + bounding_box["width"] / 2
+        center_y = bounding_box["y"] + bounding_box["height"] / 2
+
+        # Perform click at coordinates using page.mouse.click
+        # Note: If in iframe, coordinates are relative to iframe's position in page
+        await page.mouse.click(center_x, center_y)
+
+        logger.info(
+            f"[Coordinate Click] Clicked at ({center_x:.1f}, {center_y:.1f}) "
+            f"(element box: {bounding_box['width']:.0f}x{bounding_box['height']:.0f})"
+        )
+
+        return ToolResult(
+            success=True,
+            data={
+                "method": "coordinate_click",
+                "center_x": center_x,
+                "center_y": center_y,
+                "bounding_box": bounding_box,
+            },
+            metadata={
+                "frame": frame.name if frame else None,
+            },
+        )
+
+    except Exception as e:
+        return ToolResult(
+            success=False,
+            error=f"Coordinate click failed: {e!s}",
+            metadata={"method": "coordinate_click"},
+        )

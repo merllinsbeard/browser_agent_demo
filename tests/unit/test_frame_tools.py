@@ -305,12 +305,276 @@ class TestFindElementInAllFrames:
 
 
 class TestCoordinateClick:
-    """Test coordinate_click fallback mechanism (T017)."""
+    """Test coordinate_click fallback mechanism (T017).
 
-    def test_coordinate_click(self):
-        """Test coordinate-based click as final fallback."""
-        # Implementation in T017
-        pytest.skip("Test implementation in T017")
+    FR-024: coordinate_click fallback MUST get element bounding box,
+    calculate center coordinates, and click at those x,y coordinates.
+    """
+
+    @pytest.mark.asyncio
+    async def test_coordinate_click_calculates_center(self):
+        """Test coordinate_click calculates correct center from bounding box."""
+        from browser_agent.tools.interactions import coordinate_click
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with a button at known position
+            await page.set_content("""
+                <html>
+                <body style="margin: 0; padding: 0;">
+                    <button id="test-btn" style="
+                        position: absolute;
+                        left: 100px;
+                        top: 50px;
+                        width: 200px;
+                        height: 40px;
+                    ">Click Me</button>
+                    <div id="result"></div>
+                    <script>
+                        document.getElementById('test-btn').addEventListener('click', function(e) {
+                            document.getElementById('result').textContent = 'clicked';
+                        });
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Get the button locator
+            button = page.locator("#test-btn")
+
+            # Call coordinate_click
+            result = await coordinate_click(page, button)
+
+            # Verify click succeeded
+            assert result.success is True
+            assert result.data.get("method") == "coordinate_click"
+            assert "center_x" in result.data
+            assert "center_y" in result.data
+
+            # Verify the click actually happened (check DOM state)
+            result_text = await page.locator("#result").text_content()
+            assert result_text == "clicked"
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_coordinate_click_returns_coordinates(self):
+        """Test coordinate_click returns the calculated coordinates in result data."""
+        from browser_agent.tools.interactions import coordinate_click
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            await page.set_content("""
+                <html>
+                <body style="margin: 0; padding: 0;">
+                    <button id="test-btn" style="
+                        position: absolute;
+                        left: 100px;
+                        top: 50px;
+                        width: 200px;
+                        height: 40px;
+                    ">Click Me</button>
+                </body>
+                </html>
+            """)
+
+            button = page.locator("#test-btn")
+            result = await coordinate_click(page, button)
+
+            # Verify result contains coordinate information
+            assert result.success is True
+            # Center should be at approximately (200, 70) based on position
+            # left=100, width=200 => center_x = 100 + 200/2 = 200
+            # top=50, height=40 => center_y = 50 + 40/2 = 70
+            assert abs(result.data["center_x"] - 200) < 5  # Allow small margin
+            assert abs(result.data["center_y"] - 70) < 5
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_coordinate_click_handles_no_bounding_box(self):
+        """Test coordinate_click handles elements with no bounding box."""
+        from browser_agent.tools.interactions import coordinate_click
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with hidden element (no bounding box)
+            await page.set_content("""
+                <html>
+                <body>
+                    <button id="hidden-btn" style="display: none;">Hidden</button>
+                </body>
+                </html>
+            """)
+
+            button = page.locator("#hidden-btn")
+            result = await coordinate_click(page, button)
+
+            # Should fail gracefully with error message
+            assert result.success is False
+            assert "bounding box" in result.error.lower() or "hidden" in result.error.lower()
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_coordinate_click_handles_element_outside_viewport(self):
+        """Test coordinate_click scrolls to element if needed."""
+        from browser_agent.tools.interactions import coordinate_click
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+            await page.set_viewport_size({"width": 800, "height": 600})
+
+            # Create page with element far below viewport
+            await page.set_content("""
+                <html>
+                <body style="margin: 0; height: 2000px;">
+                    <button id="far-btn" style="
+                        position: absolute;
+                        left: 100px;
+                        top: 1500px;
+                        width: 100px;
+                        height: 40px;
+                    ">Far Button</button>
+                    <div id="result"></div>
+                    <script>
+                        document.getElementById('far-btn').addEventListener('click', function() {
+                            document.getElementById('result').textContent = 'clicked';
+                        });
+                    </script>
+                </body>
+                </html>
+            """)
+
+            button = page.locator("#far-btn")
+            result = await coordinate_click(page, button)
+
+            # Should succeed after scrolling element into view
+            assert result.success is True
+            result_text = await page.locator("#result").text_content()
+            assert result_text == "clicked"
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_coordinate_click_with_frame_context(self):
+        """Test coordinate_click includes frame context when clicking in iframe."""
+        from browser_agent.tools.interactions import coordinate_click
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with iframe containing a button
+            await page.set_content("""
+                <html>
+                <body style="margin: 0; padding: 0;">
+                    <iframe id="test-frame" name="test-frame" style="width: 400px; height: 200px; border: none;"></iframe>
+                    <script>
+                        const iframe = document.getElementById('test-frame');
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write(`
+                            <html>
+                            <body style="margin: 0; padding: 0;">
+                                <button id="iframe-btn" style="
+                                    position: absolute;
+                                    left: 50px;
+                                    top: 30px;
+                                    width: 100px;
+                                    height: 30px;
+                                ">Iframe Button</button>
+                                <div id="result"></div>
+                                <script>
+                                    document.getElementById('iframe-btn').addEventListener('click', function() {
+                                        document.getElementById('result').textContent = 'iframe-clicked';
+                                    });
+                                <\/script>
+                            </body>
+                            </html>
+                        `);
+                        doc.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Get button locator from iframe
+            frame = page.frame(name="test-frame")
+            assert frame is not None
+            button = frame.locator("#iframe-btn")
+
+            # Use coordinate_click with the frame
+            result = await coordinate_click(page, button, frame=frame)
+
+            # Should succeed and include frame context
+            assert result.success is True
+            assert result.data.get("method") == "coordinate_click"
+
+            # Verify click actually happened in iframe
+            result_text = await frame.locator("#result").text_content()
+            assert result_text == "iframe-clicked"
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_coordinate_click_uses_mouse_click(self):
+        """Test coordinate_click uses page.mouse.click for the actual click."""
+        from browser_agent.tools.interactions import coordinate_click
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page that records click coordinates
+            await page.set_content("""
+                <html>
+                <body style="margin: 0; padding: 0;">
+                    <div id="target" style="
+                        position: absolute;
+                        left: 50px;
+                        top: 50px;
+                        width: 100px;
+                        height: 100px;
+                        background: red;
+                    "></div>
+                    <div id="coords"></div>
+                    <script>
+                        document.addEventListener('click', function(e) {
+                            document.getElementById('coords').textContent = e.clientX + ',' + e.clientY;
+                        });
+                    </script>
+                </body>
+                </html>
+            """)
+
+            target = page.locator("#target")
+            result = await coordinate_click(page, target)
+
+            assert result.success is True
+
+            # Verify click was at center (50+50=100, 50+50=100)
+            coords_text = await page.locator("#coords").text_content()
+            click_x, click_y = map(int, coords_text.split(","))
+
+            # Center of 100x100 div at (50, 50) should be (100, 100)
+            assert abs(click_x - 100) < 5
+            assert abs(click_y - 100) < 5
+
+            await browser.close()
 
 
 class TestRetryChainStateMachine:

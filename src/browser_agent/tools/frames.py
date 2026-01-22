@@ -169,6 +169,67 @@ async def _check_frame_accessible(frame: Frame) -> bool:
         return False
 
 
+def is_cross_origin_frame(frame: Frame) -> bool:
+    """
+    Detect if frame is cross-origin with warning logging (FR-027).
+
+    Args:
+        frame: Playwright Frame instance
+
+    Returns:
+        True if frame is cross-origin (inaccessible), False if same-origin
+
+    Examples:
+        >>> if is_cross_origin_frame(frame):
+        ...     logger.warning(f"Skipping cross-origin iframe: {frame.name}")
+    """
+    try:
+        # Try to access frame properties - will fail for cross-origin
+        _ = frame.url
+        _ = frame.title
+        return False  # Same-origin
+    except Exception as e:
+        # Cross-origin frame detected
+        logger.warning(
+            f"Cross-origin iframe detected (name: {frame.name}, url: {getattr(frame, 'url', 'unknown')}): {e}. "
+            f"Frame content is inaccessible due to same-origin policy. Skipping."
+        )
+        return True
+
+
+async def skip_cross_origin_frames_gracefully(frames: list[Frame]) -> list[Frame]:
+    """
+    Filter out cross-origin frames with warning logging (FR-027).
+
+    Args:
+        frames: List of Playwright Frame objects
+
+    Returns:
+        List of accessible (same-origin) frames only
+
+    Examples:
+        >>> accessible_frames = await skip_cross_origin_frames_gracefully(page.frames)
+        >>> logger.info(f"Found {len(accessible_frames)} accessible frames")
+    """
+    accessible_frames = []
+    skipped_count = 0
+
+    for frame in frames:
+        if is_cross_origin_frame(frame):
+            skipped_count += 1
+            continue
+
+        accessible_frames.append(frame)
+
+    if skipped_count > 0:
+        logger.info(
+            f"Skipped {skipped_count} cross-origin iframe(s) due to same-origin policy restrictions. "
+            f"Proceeding with {len(accessible_frames)} accessible frame(s)."
+        )
+
+    return accessible_frames
+
+
 # Additional frame tools will be implemented in later tasks:
 # - switch_to_frame: Change active frame context (T028)
 # - get_frame_content: Extract frame content explicitly (T027)

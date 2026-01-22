@@ -223,6 +223,46 @@ class TestDynamicIframeWaiting:
             await browser.close()
 
 
+class TestCrossOriginDetection:
+    """Test cross-origin frame detection with warning logging (T007)."""
+
+    @pytest.mark.asyncio
+    async def test_cross_origin_detection(self):
+        """Test cross-origin iframe detection with warning logging."""
+        from browser_agent.tools.frames import is_cross_origin_frame
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            await page.goto("about:blank")
+
+            # Main frame should not be cross-origin
+            main_frame = page.main_frame
+            assert not is_cross_origin_frame(main_frame)
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_skip_cross_origin_frames_gracefully(self):
+        """Test graceful skipping of cross-origin frames."""
+        from browser_agent.tools.frames import skip_cross_origin_frames_gracefully
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            await page.goto("about:blank")
+
+            # All frames on same-origin page should be accessible
+            frames = await skip_cross_origin_frames_gracefully(page.frames)
+            assert len(frames) >= 1  # At least main frame
+
+            await browser.close()
+
+
 class TestRecursiveAccessibilityTree:
     """Test recursive frame traversal (T022)."""
 

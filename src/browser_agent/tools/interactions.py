@@ -155,6 +155,31 @@ def _find_matching_names_from_yaml(
     return found
 
 
+async def _get_main_frame_context(page: Page) -> dict:
+    """
+    Get the context dictionary for the main frame.
+
+    Used by interaction tools to include frame_context in ToolResult.data
+    when operating on the main frame (FR-011).
+
+    Args:
+        page: Playwright Page instance
+
+    Returns:
+        Dictionary representation of the main frame's FrameContext
+    """
+    main_frame = page.main_frame
+    return FrameContext(
+        name=main_frame.name or "main",
+        index=0,
+        src=main_frame.url,
+        aria_label=None,
+        title=None,
+        accessible=True,
+        parent_index=None,
+    ).model_dump()
+
+
 async def _find_element_in_all_frames(
     page: Page,
     description: str,
@@ -329,6 +354,9 @@ async def click(
             await locator.click()
             click_type = "clicked"
 
+        # Get main frame context for FR-011 compliance
+        frame_context = await _get_main_frame_context(page)
+
         return ToolResult(
             success=True,
             data={
@@ -336,6 +364,7 @@ async def click(
                 "element": element_description,
                 "tag": tag_name,
                 "text": element_text,
+                "frame_context": frame_context,  # FR-011: Include frame context
             },
             metadata={
                 "description": element_description,
@@ -571,6 +600,9 @@ async def scroll(
             "() => ({ x: window.scrollX, y: window.scrollY })"
         )
 
+        # Frame context for element-based scrolling (FR-011)
+        element_frame_context = None
+
         if to_top:
             await page.evaluate("window.scrollTo(0, 0)")
             action = "scrolled to top"
@@ -591,6 +623,8 @@ async def scroll(
                 )
             await locator.scroll_into_view_if_needed()
             action = f"scrolled to element: {to_element}"
+            # Get main frame context for FR-011 compliance (element scroll)
+            element_frame_context = await _get_main_frame_context(page)
 
         elif direction:
             dx = 0
@@ -617,13 +651,18 @@ async def scroll(
             "() => ({ x: window.scrollX, y: window.scrollY })"
         )
 
+        # Build result data with optional frame_context (FR-011)
+        result_data = {
+            "action": action,
+            "scroll_from": initial_scroll,
+            "scroll_to": final_scroll,
+        }
+        if element_frame_context is not None:
+            result_data["frame_context"] = element_frame_context
+
         return ToolResult(
             success=True,
-            data={
-                "action": action,
-                "scroll_from": initial_scroll,
-                "scroll_to": final_scroll,
-            },
+            data=result_data,
         )
 
     except Exception as e:
@@ -676,11 +715,15 @@ async def hover(
         await locator.wait_for(state="visible", timeout=5000)
         await locator.hover()
 
+        # Get main frame context for FR-011 compliance
+        frame_context = await _get_main_frame_context(page)
+
         return ToolResult(
             success=True,
             data={
                 "action": "hovered",
                 "element": element_description,
+                "frame_context": frame_context,  # FR-011: Include frame context
             },
         )
 
@@ -747,12 +790,16 @@ async def select_option(
         await locator.wait_for(state="visible", timeout=5000)
         await locator.select_option(label=option)
 
+        # Get main frame context for FR-011 compliance
+        frame_context = await _get_main_frame_context(page)
+
         return ToolResult(
             success=True,
             data={
                 "action": "selected",
                 "element": element_description,
                 "option": option,
+                "frame_context": frame_context,  # FR-011: Include frame context
             },
         )
 

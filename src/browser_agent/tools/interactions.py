@@ -222,21 +222,32 @@ async def _find_element_in_all_frames(
     # Prioritize frames for search order
     prioritized_frames = _prioritize_frames(frame_contexts, include_inaccessible=False)
 
-    logger.debug(
-        f"Searching for '{description}' across {len(prioritized_frames)} accessible frames "
-        f"(total: {len(page.frames)})"
+    # FR-016: Log frame context switch - beginning cross-frame search
+    logger.info(
+        f"[Frame Search] Searching for '{description}' across {len(prioritized_frames)} "
+        f"accessible frames (total: {len(page.frames)})"
     )
 
     # Search each frame in priority order
     searched_frames = []
+    previous_frame_index = None
     for frame_context in prioritized_frames:
         frame = page.frames[frame_context.index]
         searched_frames.append(frame_context.index)
 
-        logger.debug(
-            f"Searching frame {frame_context.index} "
-            f"(name: {frame_context.name}, aria_label: {frame_context.aria_label})"
+        # FR-016: Log frame context switch when moving to a new frame
+        if previous_frame_index is not None:
+            logger.info(
+                f"[Frame Switch] Switching from frame {previous_frame_index} "
+                f"to frame {frame_context.index}"
+            )
+
+        frame_label = frame_context.aria_label or frame_context.title or frame_context.name
+        logger.info(
+            f"[Frame Search] Searching frame {frame_context.index} "
+            f"(label: {frame_label or 'none'})"
         )
+        previous_frame_index = frame_context.index
 
         try:
             locator, error = await _find_element_by_description(
@@ -244,9 +255,17 @@ async def _find_element_in_all_frames(
             )
 
             if locator is not None:
-                logger.debug(
-                    f"Element '{description}' found in frame {frame_context.index}"
-                )
+                # FR-016: Log frame context when element is found
+                frame_label = frame_context.aria_label or frame_context.title or frame_context.name
+                if frame_context.index == 0:
+                    logger.info(
+                        f"[Frame Search] Element '{description}' found in main frame"
+                    )
+                else:
+                    logger.info(
+                        f"[Frame Search] Element '{description}' found in iframe {frame_context.index} "
+                        f"(label: {frame_label or 'none'}, src: {frame_context.src or 'none'})"
+                    )
                 return FrameLocatorResult(
                     found=True,
                     frame_context=frame_context,
@@ -262,9 +281,10 @@ async def _find_element_in_all_frames(
             continue
 
     # Element not found in any frame
-    logger.debug(
-        f"Element '{description}' not found in any frame "
-        f"(searched frames: {searched_frames})"
+    # FR-016: Log search completion with all frames searched
+    logger.info(
+        f"[Frame Search] Element '{description}' not found in any frame "
+        f"(searched {len(searched_frames)} frames: {searched_frames})"
     )
     return FrameLocatorResult(
         found=False,
@@ -491,10 +511,17 @@ async def type_text(
             locator = result.locator
             if result.frame_context:
                 frame_context = result.frame_context.model_dump()
-                logger.debug(
-                    f"Element found in frame {result.frame_context.index} "
-                    f"(name: {result.frame_context.name})"
-                )
+                # FR-016: Log frame context for type_text operation
+                if result.frame_context.index != 0:
+                    frame_label = (
+                        result.frame_context.aria_label
+                        or result.frame_context.title
+                        or result.frame_context.name
+                    )
+                    logger.info(
+                        f"[Frame Context] type_text will operate in iframe {result.frame_context.index} "
+                        f"(label: {frame_label or 'none'})"
+                    )
 
         if locator is None:
             return ToolResult(

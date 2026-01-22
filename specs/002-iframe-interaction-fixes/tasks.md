@@ -39,7 +39,7 @@
 
 - [x] T004 Implement list_frames tool that enumerates page.frames with attributes (name, src, aria-label, title, accessible) in src/browser_agent/tools/frames.py
 - [x] T005 [P] Implement _prioritize_frames() utility for semantic-first frame search order (FR-025) in src/browser_agent/tools/frames.py
-- [ ] T006 [P] Implement _wait_for_dynamic_iframes() with 5s timeout and 500ms polling (FR-026) in src/browser_agent/tools/frames.py
+- [x] T006 [P] Implement _wait_for_dynamic_iframes() with 5s timeout and 500ms polling (FR-026) in src/browser_agent/tools/frames.py
 - [ ] T007 Implement cross-origin detection with warning logging and graceful skip (FR-027) in src/browser_agent/tools/frames.py
 - [ ] T008 Register frames.py tools in src/browser_agent/tools/__init__.py
 

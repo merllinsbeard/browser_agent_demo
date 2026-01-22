@@ -180,10 +180,47 @@ class TestFramePrioritization:
 class TestDynamicIframeWaiting:
     """Test dynamic iframe waiting mechanism (T006)."""
 
-    def test_dynamic_iframe_wait(self):
+    @pytest.mark.asyncio
+    async def test_dynamic_iframe_wait(self):
         """Test dynamic iframe polling with timeout."""
-        # Implementation in T006
-        pytest.skip("Test implementation in T006")
+        from browser_agent.tools.frames import _wait_for_dynamic_iframes
+        from playwright.async_api import async_playwright
+
+        # Test with real browser (brief test)
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Navigate to simple page
+            await page.goto("about:blank")
+
+            # Wait for frames (should return immediately with just main frame)
+            frames = await _wait_for_dynamic_iframes(page, timeout_ms=1000)
+            assert len(frames) >= 1  # At least main frame
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_dynamic_iframe_wait_with_expected_count(self):
+        """Test waiting until expected frame count is reached."""
+        from browser_agent.tools.frames import _wait_for_dynamic_iframes
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            await page.goto("about:blank")
+
+            # Expect at least 1 frame (should return immediately)
+            frames = await _wait_for_dynamic_iframes(
+                page,
+                timeout_ms=1000,
+                expected_count=1,
+            )
+            assert len(frames) >= 1
+
+            await browser.close()
 
 
 class TestRecursiveAccessibilityTree:

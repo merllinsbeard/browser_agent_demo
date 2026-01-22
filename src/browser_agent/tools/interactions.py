@@ -298,7 +298,7 @@ async def _find_element_in_all_frames(
 
 @tool(
     name="click",
-    description="Click on an element described in natural language. Uses accessibility tree and multiple strategies to find the element.",
+    description="Click on an element described in natural language. Automatically searches across all frames (main page and iframes). Uses accessibility tree and multiple strategies to find the element.",
     parameters={
         "type": "object",
         "properties": {
@@ -318,6 +318,10 @@ async def _find_element_in_all_frames(
                 "type": "boolean",
                 "description": "Whether to right-click (default: false)",
             },
+            "frame": {
+                "type": "string",
+                "description": "Optional frame name/aria-label to search in. If not specified, searches all frames automatically.",
+            },
         },
         "required": ["element_description"],
     },
@@ -328,9 +332,13 @@ async def click(
     role: Optional[str] = None,
     double_click: bool = False,
     right_click: bool = False,
+    frame: Optional[str] = None,
 ) -> ToolResult:
     """
-    Click on an element by natural language description.
+    Click on an element with automatic iframe search.
+
+    Implements FR-013: click supports frame parameter and auto-search.
+    Implements FR-011: Returns frame_context in ToolResult.data.
 
     Args:
         page: Playwright Page instance
@@ -338,20 +346,74 @@ async def click(
         role: Optional ARIA role filter
         double_click: Whether to double-click
         right_click: Whether to right-click
+        frame: Optional frame name/aria-label to search in
 
     Returns:
-        ToolResult indicating success or failure
+        ToolResult indicating success or failure with frame_context
     """
+    frame_context = None
+
     try:
-        locator, error = await _find_element_by_description(
-            page, element_description, role
-        )
+        # If explicit frame specified, search only in that frame
+        if frame:
+            target_frame = None
+            for f in page.frames:
+                if f.name == frame:
+                    target_frame = f
+                    break
+            if target_frame is None:
+                # Try matching by checking if page has frame with aria-label
+                # Build frame contexts to find by aria-label
+                for idx, f in enumerate(page.frames):
+                    ctx = await _extract_frame_context(f, idx, page)
+                    if ctx.aria_label == frame or ctx.title == frame:
+                        target_frame = f
+                        frame_context = ctx.model_dump()
+                        break
+
+            if target_frame is None:
+                return ToolResult(
+                    success=False,
+                    error=f"Frame '{frame}' not found",
+                    metadata={"description": element_description, "frame": frame},
+                )
+
+            locator, error = await _find_element_by_description(
+                target_frame, element_description, role
+            )
+        else:
+            # Auto-search across all frames (FR-013)
+            result = await _find_element_in_all_frames(
+                page, element_description, role
+            )
+
+            if not result.found:
+                return ToolResult(
+                    success=False,
+                    error=f"Could not find element matching: '{element_description}'",
+                    metadata={"description": element_description, "role": role},
+                )
+
+            locator = result.locator
+            if result.frame_context:
+                frame_context = result.frame_context.model_dump()
+                # FR-016: Log frame context for click operation
+                if result.frame_context.index != 0:
+                    frame_label = (
+                        result.frame_context.aria_label
+                        or result.frame_context.title
+                        or result.frame_context.name
+                    )
+                    logger.info(
+                        f"[Frame Context] click will operate in iframe {result.frame_context.index} "
+                        f"(label: {frame_label or 'none'})"
+                    )
 
         if locator is None:
             return ToolResult(
                 success=False,
-                error=error,
-                metadata={"description": element_description, "role": role},
+                error=f"Could not find element matching: '{element_description}'",
+                metadata={"description": element_description, "frame": frame},
             )
 
         # Ensure element is visible and clickable
@@ -374,8 +436,9 @@ async def click(
             await locator.click()
             click_type = "clicked"
 
-        # Get main frame context for FR-011 compliance
-        frame_context = await _get_main_frame_context(page)
+        # If frame_context not set (explicit frame search), get main frame context
+        if frame_context is None:
+            frame_context = await _get_main_frame_context(page)
 
         return ToolResult(
             success=True,
@@ -389,6 +452,7 @@ async def click(
             metadata={
                 "description": element_description,
                 "role": role,
+                "frame": frame,
             },
         )
 
@@ -396,7 +460,7 @@ async def click(
         return ToolResult(
             success=False,
             error=f"Click failed: {e!s}",
-            metadata={"description": element_description},
+            metadata={"description": element_description, "frame": frame},
         )
 
 

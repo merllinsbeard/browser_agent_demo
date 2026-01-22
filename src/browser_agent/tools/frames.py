@@ -172,7 +172,59 @@ async def _check_frame_accessible(frame: Frame) -> bool:
 # Additional frame tools will be implemented in later tasks:
 # - switch_to_frame: Change active frame context (T028)
 # - get_frame_content: Extract frame content explicitly (T027)
-# - _wait_for_dynamic_iframes(): Dynamic iframe polling (T006)
+
+
+async def _wait_for_dynamic_iframes(
+    page: Page,
+    timeout_ms: int = 5000,
+    poll_interval_ms: int = 500,
+    expected_count: int | None = None,
+) -> list[Frame]:
+    """
+    Wait for dynamic iframes to load with polling (FR-026).
+
+    Some sites load iframes dynamically after initial page load.
+    This function polls for new frames until timeout or expected count reached.
+
+    Args:
+        page: Playwright Page instance
+        timeout_ms: Maximum time to wait in milliseconds (default: 5000)
+        poll_interval_ms: Time between polls in milliseconds (default: 500)
+        expected_count: Optional expected frame count (returns when reached)
+
+    Returns:
+        List of frames found after waiting
+
+    Examples:
+        >>> # Wait up to 5s for iframes to load
+        >>> frames = await _wait_for_dynamic_iframes(page)
+        >>>
+        >>> # Wait for specific frame count
+        >>> frames = await _wait_for_dynamic_iframes(page, expected_count=3)
+    """
+    import asyncio
+
+    start_time = asyncio.get_event_loop().time()
+    initial_count = len(page.frames)
+
+    logger.debug(f"Waiting for dynamic iframes. Initial count: {initial_count}")
+
+    while True:
+        current_time = asyncio.get_event_loop().time()
+        elapsed_ms = int((current_time - start_time) * 1000)
+
+        # Check timeout
+        if elapsed_ms >= timeout_ms:
+            logger.debug(f"Timeout waiting for iframes. Found {len(page.frames)} frames.")
+            return page.frames
+
+        # Check if expected count reached
+        if expected_count is not None and len(page.frames) >= expected_count:
+            logger.debug(f"Expected frame count {expected_count} reached.")
+            return page.frames
+
+        # Wait for poll interval
+        await asyncio.sleep(poll_interval_ms / 1000)
 
 
 def _prioritize_frames(

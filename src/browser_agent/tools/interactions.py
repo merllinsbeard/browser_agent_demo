@@ -353,7 +353,7 @@ async def click(
 
 @tool(
     name="type_text",
-    description="Type text into an input field described in natural language. Optionally clears the field first.",
+    description="Type text into an input field described in natural language. Automatically searches across all frames (main page and iframes). Optionally clears the field first.",
     parameters={
         "type": "object",
         "properties": {
@@ -373,6 +373,10 @@ async def click(
                 "type": "boolean",
                 "description": "Whether to press Enter after typing (default: false)",
             },
+            "frame": {
+                "type": "string",
+                "description": "Optional frame name/aria-label to search in. If not specified, searches all frames automatically.",
+            },
         },
         "required": ["element_description", "text"],
     },
@@ -383,9 +387,13 @@ async def type_text(
     text: str,
     clear_first: bool = True,
     press_enter: bool = False,
+    frame: Optional[str] = None,
 ) -> ToolResult:
     """
-    Type text into an input field.
+    Type text into an input field with automatic iframe search.
+
+    Implements FR-014: type_text supports frame parameter and auto-search.
+    Implements FR-011: Returns frame_context in ToolResult.data.
 
     Args:
         page: Playwright Page instance
@@ -393,26 +401,77 @@ async def type_text(
         text: Text to type
         clear_first: Whether to clear field first
         press_enter: Whether to press Enter after
+        frame: Optional frame name/aria-label to search in
 
     Returns:
-        ToolResult indicating success or failure
+        ToolResult indicating success or failure with frame_context
     """
-    try:
-        locator, error = await _find_element_by_description(
-            page, element_description, role="textbox"
-        )
+    frame_context = None
 
-        if locator is None:
-            # Try without role restriction
+    try:
+        # If explicit frame specified, search only in that frame
+        if frame:
+            target_frame = None
+            for f in page.frames:
+                if f.name == frame:
+                    target_frame = f
+                    break
+            if target_frame is None:
+                # Try matching by checking if page has frame with aria-label
+                # Build frame contexts to find by aria-label
+                for idx, f in enumerate(page.frames):
+                    ctx = await _extract_frame_context(f, idx, page)
+                    if ctx.aria_label == frame or ctx.title == frame:
+                        target_frame = f
+                        frame_context = ctx.model_dump()
+                        break
+
+            if target_frame is None:
+                return ToolResult(
+                    success=False,
+                    error=f"Frame '{frame}' not found",
+                    metadata={"description": element_description, "frame": frame},
+                )
+
             locator, error = await _find_element_by_description(
-                page, element_description
+                target_frame, element_description, role="textbox"
             )
+            if locator is None:
+                locator, error = await _find_element_by_description(
+                    target_frame, element_description
+                )
+        else:
+            # Auto-search across all frames (FR-014)
+            result = await _find_element_in_all_frames(
+                page, element_description, role="textbox"
+            )
+
+            if not result.found:
+                # Try without role restriction
+                result = await _find_element_in_all_frames(
+                    page, element_description
+                )
+
+            if not result.found:
+                return ToolResult(
+                    success=False,
+                    error=f"Could not find element matching: '{element_description}'",
+                    metadata={"description": element_description},
+                )
+
+            locator = result.locator
+            if result.frame_context:
+                frame_context = result.frame_context.model_dump()
+                logger.debug(
+                    f"Element found in frame {result.frame_context.index} "
+                    f"(name: {result.frame_context.name})"
+                )
 
         if locator is None:
             return ToolResult(
                 success=False,
-                error=error,
-                metadata={"description": element_description},
+                error=f"Could not find element matching: '{element_description}'",
+                metadata={"description": element_description, "frame": frame},
             )
 
         # Ensure element is visible and editable
@@ -435,11 +494,14 @@ async def type_text(
                 "action": "typed",
                 "element": element_description,
                 "text": text if len(text) <= 50 else text[:47] + "...",
+                "text_entered": text,  # Full text for verification
                 "pressed_enter": press_enter,
+                "frame_context": frame_context,  # FR-011: Include frame context
             },
             metadata={
                 "description": element_description,
                 "full_text_length": len(text),
+                "frame": frame,
             },
         )
 
@@ -447,7 +509,7 @@ async def type_text(
         return ToolResult(
             success=False,
             error=f"Type failed: {e!s}",
-            metadata={"description": element_description},
+            metadata={"description": element_description, "frame": frame},
         )
 
 

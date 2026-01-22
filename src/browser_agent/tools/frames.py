@@ -115,24 +115,44 @@ async def _extract_frame_context(frame: Frame, index: int, page: Page) -> FrameC
     name = frame.name
     src = frame.url if frame.url else None
 
-    # For iframes, try to get element attributes
+    # For iframes, try to get element attributes from the PARENT page
     aria_label = None
     title = None
     parent_index = None
 
     if frame.parent_frame is not None:  # This is an iframe (not main frame)
+        parent_frame = frame.parent_frame
+
         try:
-            # Try to get the frame element
-            # Note: This may fail for cross-origin iframes
-            frame_element = await frame.query_selector("iframe") if frame != page.main_frame else None
+            # Find the iframe element in the parent frame by name or src
+            frame_element = None
+
+            # Try finding by name attribute first
+            if name:
+                frame_element = await parent_frame.query_selector(f'iframe[name="{name}"]')
+
+            # If not found by name, try by src
+            if not frame_element and src:
+                frame_element = await parent_frame.query_selector(f'iframe[src="{src}"]')
+
+            # If still not found, try all iframes and match by frame reference
+            if not frame_element:
+                iframe_elements = await parent_frame.query_selector_all("iframe")
+                for iframe_el in iframe_elements:
+                    try:
+                        content_frame = await iframe_el.content_frame()
+                        if content_frame == frame:
+                            frame_element = iframe_el
+                            break
+                    except Exception:
+                        continue
 
             if frame_element:
                 aria_label = await frame_element.get_attribute("aria-label")
                 title = await frame_element.get_attribute("title")
 
-                # Get parent frame index
-                if frame.parent_frame:
-                    parent_index = page.frames.index(frame.parent_frame) if frame.parent_frame in page.frames else None
+            # Get parent frame index
+            parent_index = page.frames.index(parent_frame) if parent_frame in page.frames else None
 
         except Exception as e:
             # Cross-origin iframe - cannot access element attributes

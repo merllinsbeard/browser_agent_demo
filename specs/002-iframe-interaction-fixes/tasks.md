@@ -26,7 +26,7 @@
 **Purpose**: Create shared data models and module structure
 
 - [x] T001 Create Pydantic models (FrameContext, FrameLocatorResult, InteractionAttempt, RetryChain) in src/browser_agent/tools/frame_models.py
-- [ ] T002 [P] Create frames.py module skeleton with @tool decorator imports in src/browser_agent/tools/frames.py
+- [x] T002 [P] Create frames.py module skeleton with @tool decorator imports in src/browser_agent/tools/frames.py
 - [ ] T003 [P] Create test directory structure: tests/integration/test_iframes.py and tests/unit/test_frame_tools.py
 
 ---

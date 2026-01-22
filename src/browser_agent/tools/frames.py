@@ -172,5 +172,75 @@ async def _check_frame_accessible(frame: Frame) -> bool:
 # Additional frame tools will be implemented in later tasks:
 # - switch_to_frame: Change active frame context (T028)
 # - get_frame_content: Extract frame content explicitly (T027)
-# - _prioritize_frames(): Semantic-first frame search order (T005)
 # - _wait_for_dynamic_iframes(): Dynamic iframe polling (T006)
+
+
+def _prioritize_frames(
+    frames: list[FrameContext],
+    include_inaccessible: bool = True,
+) -> list[FrameContext]:
+    """
+    Prioritize frames in semantic-first search order (FR-025).
+
+    Args:
+        frames: List of FrameContext objects to prioritize
+        include_inaccessible: Include cross-origin iframes (default: true)
+
+    Returns:
+        Prioritized list of frames:
+        1. Main frame (index 0) - always first
+        2. Frames with semantic labels (aria-label, title, or name)
+        3. Remaining frames by index
+
+    Priority order within semantic frames:
+    - aria-label (highest priority for accessibility)
+    - title
+    - name
+
+    Examples:
+        >>> frames = [FrameContext(index=0), FrameContext(index=1, aria_label="Search")]
+        >>> prioritized = _prioritize_frames(frames)
+        >>> assert prioritized[0].index == 0  # Main frame first
+        >>> assert prioritized[1].aria_label == "Search"  # Semantic frame next
+    """
+    # Filter out inaccessible frames if requested
+    accessible_frames = [f for f in frames if f.accessible or include_inaccessible]
+
+    # Separate main frame from iframes
+    main_frame = None
+    iframes = []
+
+    for frame in accessible_frames:
+        if frame.index == 0:
+            main_frame = frame
+        else:
+            iframes.append(frame)
+
+    # Prioritize iframes by semantic labels
+    def get_semantic_priority(frame: FrameContext) -> tuple[int, int]:
+        """
+        Return priority tuple (semantic_score, index).
+
+        Lower score = higher priority.
+        - aria-label: score 0 (highest)
+        - title: score 1
+        - name: score 2
+        - No semantic label: score 3
+        """
+        if frame.aria_label:
+            return (0, frame.index)
+        elif frame.title:
+            return (1, frame.index)
+        elif frame.name:
+            return (2, frame.index)
+        else:
+            return (3, frame.index)
+
+    # Sort iframes by semantic priority
+    sorted_iframes = sorted(iframes, key=get_semantic_priority)
+
+    # Combine: main frame first, then sorted iframes
+    if main_frame:
+        return [main_frame] + sorted_iframes
+    else:
+        return sorted_iframes

@@ -122,8 +122,59 @@ class TestFramePrioritization:
 
     def test_frame_prioritization(self):
         """Test frames prioritized by semantic labeling."""
-        # Implementation in T005
-        pytest.skip("Test implementation in T005")
+        from browser_agent.tools.frames import _prioritize_frames
+
+        # Create test frames
+        frames = [
+            FrameContext(index=0),  # Main frame
+            FrameContext(index=2, name="frame2"),  # Has name
+            FrameContext(index=3, aria_label="Search"),  # Has aria-label (highest priority)
+            FrameContext(index=1, title="Widget"),  # Has title
+            FrameContext(index=4),  # No semantic label
+        ]
+
+        # Prioritize frames
+        prioritized = _prioritize_frames(frames)
+
+        # Verify main frame is first
+        assert prioritized[0].index == 0
+
+        # Verify aria-label frame comes before title frame
+        assert prioritized[1].aria_label == "Search"
+        assert prioritized[1].index == 3
+
+        # Verify title frame comes before name frame
+        assert prioritized[2].title == "Widget"
+        assert prioritized[2].index == 1
+
+        # Verify name frame comes before non-semantic frame
+        assert prioritized[3].name == "frame2"
+        assert prioritized[3].index == 2
+
+        # Verify non-semantic frame is last
+        assert prioritized[4].index == 4
+        assert prioritized[4].aria_label is None
+        assert prioritized[4].title is None
+        assert prioritized[4].name is None
+
+    def test_frame_prioritization_filters_inaccessible(self):
+        """Test inaccessible frames are filtered when include_inaccessible=False."""
+        from browser_agent.tools.frames import _prioritize_frames
+
+        frames = [
+            FrameContext(index=0, accessible=True),
+            FrameContext(index=1, accessible=False),
+            FrameContext(index=2, aria_label="Search", accessible=True),
+        ]
+
+        # Without inaccessible frames
+        prioritized = _prioritize_frames(frames, include_inaccessible=False)
+        assert len(prioritized) == 2
+        assert all(f.accessible for f in prioritized)
+
+        # With inaccessible frames
+        prioritized = _prioritize_frames(frames, include_inaccessible=True)
+        assert len(prioritized) == 3
 
 
 class TestDynamicIframeWaiting:

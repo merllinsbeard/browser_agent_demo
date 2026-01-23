@@ -85,8 +85,8 @@
 
 - [x] T018 [US2] Implement coordinate_click() using bounding_box center and page.mouse.click (FR-024) in src/browser_agent/tools/interactions.py
 - [x] T019 [US2] Enhance click tool with frame parameter and auto-search (FR-013) in src/browser_agent/tools/interactions.py
-- [ ] T020 [US2] Add iframe interception detection on TimeoutError (FR-018) in src/browser_agent/tools/interactions.py
-- [ ] T021 [US2] Implement click retry chain: main_frame → iframes → coordinate_click (FR-015, FR-017) in src/browser_agent/tools/interactions.py
+- [x] T020 [US2] Add iframe interception detection on TimeoutError (FR-018) in src/browser_agent/tools/interactions.py
+- [x] T021 [US2] Implement click retry chain: main_frame → iframes → coordinate_click (FR-015, FR-017) in src/browser_agent/tools/interactions.py
 
 **Checkpoint**: User Story 2 complete - agent handles click interception with fallback strategies
 

@@ -10,7 +10,7 @@ Implements user interaction tools for the browser automation agent:
 
 import logging
 from typing import Literal, Optional, Union
-from playwright.async_api import Page, Frame, Locator
+from playwright.async_api import Page, Frame, Locator, TimeoutError as PlaywrightTimeoutError
 
 from .base import tool, ToolResult
 from .frame_models import FrameContext, FrameLocatorResult
@@ -178,6 +178,80 @@ async def _get_main_frame_context(page: Page) -> dict:
         accessible=True,
         parent_index=None,
     ).model_dump()
+
+
+async def _detect_iframe_interception(
+    page: Page,
+    locator: Locator,
+) -> Optional[FrameContext]:
+    """
+    Detect if an element is being intercepted (blocked) by an iframe overlay.
+
+    When a click times out, it may be because an iframe is positioned over
+    the element, preventing normal click interaction. This function checks
+    if any iframe on the page overlaps with the element's bounding box.
+
+    Implements FR-018: iframe interception detection on TimeoutError.
+
+    Args:
+        page: Playwright Page instance
+        locator: Locator for the element that failed to click
+
+    Returns:
+        FrameContext of the overlapping iframe if found, None otherwise
+    """
+    try:
+        # Get element's bounding box center coordinates
+        box = await locator.bounding_box()
+        if not box:
+            # Element has no bounding box (hidden or display: none)
+            return None
+
+        # Calculate center of the element
+        center_x = box["x"] + box["width"] / 2
+        center_y = box["y"] + box["height"] / 2
+
+        # Check each iframe to see if it overlaps the element
+        for idx, frame in enumerate(page.frames):
+            if idx == 0:  # Skip main frame
+                continue
+
+            try:
+                # Get frame's element (the iframe tag in the parent page)
+                frame_element = await frame.frame_element()
+                if frame_element is None:
+                    continue
+
+                # Get iframe's bounding box
+                iframe_box = await frame_element.bounding_box()
+                if not iframe_box:
+                    continue
+
+                # Check if element's center is within iframe's bounds
+                if (
+                    iframe_box["x"] <= center_x <= iframe_box["x"] + iframe_box["width"]
+                    and iframe_box["y"] <= center_y <= iframe_box["y"] + iframe_box["height"]
+                ):
+                    # Element is being intercepted by this iframe
+                    frame_context = await _extract_frame_context(frame, idx, page)
+
+                    logger.warning(
+                        f"[Frame Interception] Element click blocked by iframe at index {idx} "
+                        f"(name: {frame_context.name or 'none'}, "
+                        f"aria-label: {frame_context.aria_label or 'none'})"
+                    )
+
+                    return frame_context
+
+            except Exception:
+                # Skip frames that can't be accessed
+                continue
+
+        return None
+
+    except Exception as e:
+        logger.debug(f"Error detecting iframe interception: {e}")
+        return None
 
 
 async def _find_element_in_all_frames(
@@ -455,6 +529,78 @@ async def click(
                 "frame": frame,
             },
         )
+
+    except PlaywrightTimeoutError:
+        # FR-018, FR-015, FR-017: Click retry chain with coordinate_click fallback
+        interception_frame = await _detect_iframe_interception(page, locator)
+
+        # FR-017: Retry chain - attempt coordinate_click fallback
+        logger.info("[Retry Chain] Attempting coordinate_click fallback...")
+
+        # Call coordinate_click on the original locator
+        fallback_result = await coordinate_click(page, locator, element_description)
+
+        if fallback_result.success:
+            # Fallback succeeded - return success with retry chain info
+            click_coords = fallback_result.data
+
+            logger.info(
+                f"[Retry Chain] coordinate_click succeeded at "
+                f"({click_coords.get('center_x')}, {click_coords.get('center_y')})"
+            )
+
+            # Get frame context for the result
+            if frame_context is None:
+                frame_context = await _get_main_frame_context(page)
+
+            return ToolResult(
+                success=True,
+                data={
+                    "action": "coordinate-clicked",
+                    "element": element_description,
+                    "method": "retry_chain",
+                    "click_type": "coordinate-clicked",
+                    "frame_context": frame_context,
+                    "coordinates": {
+                        "x": click_coords.get("center_x"),
+                        "y": click_coords.get("center_y"),
+                    },
+                    "bounding_box": click_coords.get("bounding_box"),
+                    "retry_chain": {
+                        "initial_strategy": "standard_click",
+                        "fallback_used": "coordinate_click",
+                        "interception_detected": interception_frame is not None,
+                        "overlapping_frame": interception_frame.model_dump() if interception_frame else None,
+                    },
+                },
+                metadata={
+                    "description": element_description,
+                    "role": role,
+                    "frame": frame,
+                },
+            )
+        else:
+            # Fallback also failed - return structured error with full retry chain info
+            logger.warning(f"[Retry Chain] coordinate_click fallback failed: {fallback_result.error}")
+
+            return ToolResult(
+                success=False,
+                error=(
+                    "Click failed after retry chain: "
+                    "standard click timed out, coordinate_click fallback also failed"
+                ),
+                data={
+                    "retry_chain": {
+                        "initial_strategy": "standard_click",
+                        "fallback_attempted": "coordinate_click",
+                        "fallback_error": fallback_result.error or "Unknown error",
+                        "interception_detected": interception_frame is not None,
+                        "overlapping_frame": interception_frame.model_dump() if interception_frame else None,
+                    },
+                    "element_description": element_description,
+                },
+                metadata={"description": element_description, "frame": frame},
+            )
 
     except Exception as e:
         return ToolResult(

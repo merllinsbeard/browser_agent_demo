@@ -757,3 +757,111 @@ class TestFrameMetadataFormat:
         """Test frame context markers in accessibility output."""
         # Implementation in T023
         pytest.skip("Test implementation in T023")
+
+
+class TestIframeInterceptionDetection:
+    """Test iframe interception detection on TimeoutError (T020)."""
+
+    @pytest.mark.asyncio
+    async def test_detect_iframe_covering_element(self):
+        """Test detection when iframe covers element."""
+        from browser_agent.tools.interactions import _detect_iframe_interception
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with button covered by iframe
+            await page.set_content(
+                """
+                <button id="covered-btn" style="position: absolute; top: 100px; left: 100px; width: 100px; height: 50px;">
+                    Covered Button
+                </button>
+                <iframe id="overlay-iframe" style="position: absolute; top: 50px; left: 50px; width: 200px; height: 150px; z-index: 10;"
+                        srcdoc="<div>Overlay Content</div>">
+                </iframe>
+            """
+            )
+
+            # Get locator for covered button
+            button = page.locator("#covered-btn")
+            await button.wait_for(state="attached")
+
+            # Detect interception
+            interception = await _detect_iframe_interception(page, button)
+
+            # Should detect iframe interception
+            assert interception is not None
+            assert interception.index == 1
+            assert interception.name == "overlay-iframe"
+            assert interception.accessible is True
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_no_interception_when_no_iframe_covers(self):
+        """Test no false positives when element is not covered."""
+        from browser_agent.tools.interactions import _detect_iframe_interception
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with button and non-overlapping iframe
+            await page.set_content(
+                """
+                <button id="visible-btn" style="position: absolute; top: 100px; left: 100px;">
+                    Visible Button
+                </button>
+                <iframe id="separate-iframe" style="position: absolute; top: 500px; left: 500px;"
+                        srcdoc="<div>Separate Content</div>">
+                </iframe>
+            """
+            )
+
+            # Get locator for visible button
+            button = page.locator("#visible-btn")
+            await button.wait_for(state="attached")
+
+            # Detect interception
+            interception = await _detect_iframe_interception(page, button)
+
+            # Should NOT detect interception (button is not covered)
+            assert interception is None
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_no_interception_for_hidden_element(self):
+        """Test edge case for hidden elements with no bounding box."""
+        from browser_agent.tools.interactions import _detect_iframe_interception
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with hidden element
+            await page.set_content(
+                """
+                <button id="hidden-btn" style="display: none;">
+                    Hidden Button
+                </button>
+                <iframe id="overlay-iframe" style="position: absolute; top: 0; left: 0;"
+                        srcdoc="<div>Overlay Content</div>">
+                </iframe>
+            """
+            )
+
+            # Get locator for hidden button
+            button = page.locator("#hidden-btn")
+
+            # Detect interception
+            interception = await _detect_iframe_interception(page, button)
+
+            # Should return None (hidden element has no bounding box)
+            assert interception is None
+
+            await browser.close()

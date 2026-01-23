@@ -140,3 +140,69 @@ class RetryChain(BaseModel):
 
     timeout_per_frame_ms: int = 10000
     """Timeout for each frame attempt in milliseconds (default 10000)."""
+
+    @property
+    def current_strategy(self) -> Optional[str]:
+        """Get the current strategy to attempt.
+
+        Returns None if all strategies are exhausted.
+        """
+        if self.current_index >= len(self.strategies):
+            return None
+        return self.strategies[self.current_index]
+
+    @property
+    def is_exhausted(self) -> bool:
+        """Check if all retry strategies have been attempted."""
+        return self.current_index >= len(self.strategies)
+
+    @property
+    def has_succeeded(self) -> bool:
+        """Check if any attempt has succeeded."""
+        return any(attempt.success for attempt in self.attempts)
+
+    def advance(self) -> None:
+        """Advance to the next strategy in the chain."""
+        self.current_index += 1
+
+    def add_attempt(
+        self,
+        strategy: str,
+        success: bool,
+        duration_ms: int,
+        error: Optional[str] = None,
+        frame_context: Optional["FrameContext"] = None,
+    ) -> None:
+        """Add an attempt to the retry chain.
+
+        Args:
+            strategy: Strategy name that was used
+            success: Whether the attempt succeeded
+            duration_ms: Time taken in milliseconds
+            error: Error message if failed
+            frame_context: Frame context for this attempt
+        """
+        attempt = InteractionAttempt(
+            strategy=strategy,
+            success=success,
+            duration_ms=duration_ms,
+            error=error,
+            frame_context=frame_context,
+        )
+        self.attempts.append(attempt)
+
+    def to_error_dict(self) -> dict:
+        """Convert retry chain to dictionary for structured error response (FR-019).
+
+        Returns:
+            Dictionary with all attempts and metadata
+        """
+        return {
+            "strategies": self.strategies,
+            "max_attempts": self.max_attempts,
+            "attempts": [attempt.model_dump() for attempt in self.attempts],
+            "timeout_per_frame_ms": self.timeout_per_frame_ms,
+            "final_index": self.current_index,
+            "exhausted": self.is_exhausted,
+            "succeeded": self.has_succeeded,
+        }

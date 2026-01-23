@@ -250,9 +250,351 @@ async def skip_cross_origin_frames_gracefully(frames: list[Frame]) -> list[Frame
     return accessible_frames
 
 
-# Additional frame tools will be implemented in later tasks:
-# - switch_to_frame: Change active frame context (T028)
-# - get_frame_content: Extract frame content explicitly (T027)
+@tool(
+    name="get_frame_content",
+    description="Extract content from a specific frame (main frame or iframe). Use this to explicitly get text or HTML content from a frame by its name, aria-label, title, or index.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "frame_selector": {
+                "type": "string",
+                "description": 'Frame selector: "main" or "0" for main frame, frame name (e.g., "search-frame"), aria-label (e.g., "Yandex Search"), title, or index (e.g., "1", "2")',
+            },
+            "content_type": {
+                "type": "string",
+                "enum": ["text", "html", "both"],
+                "description": "Type of content to extract: 'text' for visible text, 'html' for HTML source, 'both' for both",
+                "default": "text",
+            },
+            "max_length": {
+                "type": "integer",
+                "description": "Maximum content length to return (default: 10000). Content will be truncated if longer.",
+                "default": 10000,
+            },
+        },
+        "required": ["frame_selector"],
+    },
+)
+async def get_frame_content(
+    page: Page,
+    frame_selector: str,
+    content_type: str = "text",
+    max_length: int = 10000,
+) -> ToolResult:
+    """
+    Extract content from a specific frame (FR-023).
+
+    Allows explicit extraction of iframe content (text, HTML, or both).
+    Supports multiple frame selector types (name, aria-label, title, index).
+
+    Args:
+        page: Playwright Page instance
+        frame_selector: Frame identifier ("main", name, aria-label, title, or index)
+        content_type: Type of content ("text", "html", or "both")
+        max_length: Maximum content length (default: 10000)
+
+    Returns:
+        ToolResult with frame_context and content data
+
+    Examples:
+        >>> # Get text content from iframe by name
+        >>> result = await get_frame_content(page, "search-frame", "text")
+        >>>
+        >>> # Get HTML content from main frame
+        >>> result = await get_frame_content(page, "main", "html")
+
+    Requirements: FR-023
+    """
+    try:
+        # Find the target frame
+        frame = await _find_frame_by_selector(page, frame_selector)
+        if frame is None:
+            available = await _get_available_frame_names(page)
+            return ToolResult(
+                success=False,
+                error=f"Frame '{frame_selector}' not found. Available frames: {', '.join(available)}",
+            )
+
+        # Check cross-origin accessibility
+        if is_cross_origin_frame(frame):
+            return ToolResult(
+                success=False,
+                error=f"Frame '{frame_selector}' is cross-origin and cannot be accessed due to same-origin policy.",
+            )
+
+        # Extract content based on content_type
+        data = {}
+        text_content = None
+        html_content = None
+
+        if content_type in ("text", "both"):
+            # Get visible text - try multiple methods for reliability
+            try:
+                # Method 1: inner_text on body
+                text_content = await frame.inner_text("body")
+                if not text_content:
+                    # Method 2: evaluate JavaScript to get body text
+                    text_content = await frame.evaluate("() => document.body ? document.body.innerText : ''")
+                if not text_content:
+                    # Method 3: textContent as fallback
+                    text_content = await frame.evaluate("() => document.body ? document.body.textContent : ''")
+            except Exception:
+                # If all methods fail, try evaluate as last resort
+                try:
+                    text_content = await frame.evaluate("() => document.body ? document.body.textContent : ''")
+                except Exception:
+                    text_content = ""
+
+            if text_content and len(text_content) > max_length:
+                text_content = text_content[:max_length] + "... (truncated)"
+
+        if content_type in ("html", "both"):
+            # Get HTML source
+            try:
+                html_content = await frame.inner_html("body")
+                if not html_content:
+                    # Fallback to evaluate
+                    html_content = await frame.evaluate("() => document.body ? document.body.innerHTML : ''")
+            except Exception:
+                try:
+                    html_content = await frame.evaluate("() => document.body ? document.body.innerHTML : ''")
+                except Exception:
+                    html_content = ""
+
+            if html_content and len(html_content) > max_length:
+                html_content = html_content[:max_length] + "... (truncated)"
+
+        # Build response data
+        if content_type == "text":
+            data["content"] = text_content
+        elif content_type == "html":
+            data["content"] = html_content
+        else:  # both
+            data["text"] = text_content
+            data["html"] = html_content
+
+        # Add frame context metadata
+        frame_index = page.frames.index(frame)
+        frame_context = await _extract_frame_context(frame, frame_index, page)
+        data["frame_context"] = frame_context.model_dump()
+        data["content_type"] = content_type
+        data["length"] = len(text_content or html_content or "")
+
+        return ToolResult(success=True, data=data)
+
+    except Exception as e:
+        logger.error(f"Error extracting frame content: {e}")
+        return ToolResult(
+            success=False,
+            error=f"Failed to extract frame content: {str(e)}",
+        )
+
+
+async def _find_frame_by_selector(page: Page, frame_selector: str) -> Frame | None:
+    """
+    Find frame by selector (name, aria-label, title, or index).
+
+    Args:
+        page: Playwright Page instance
+        frame_selector: Frame identifier
+
+    Returns:
+        Frame object or None if not found
+    """
+    # Main frame shortcuts
+    if frame_selector in ("main", "0"):
+        return page.main_frame
+
+    # Try numeric index
+    try:
+        index = int(frame_selector)
+        if 0 <= index < len(page.frames):
+            return page.frames[index]
+    except ValueError:
+        pass
+
+    # Search through frames for matching attributes
+    for frame in page.frames:
+        # Skip main frame (already handled)
+        if frame == page.main_frame:
+            continue
+
+        # Try matching by name
+        if frame.name == frame_selector:
+            return frame
+
+        # Try matching by aria-label or title (need to check iframe element)
+        if frame.parent_frame:
+            try:
+                iframe_elements = await frame.parent_frame.query_selector_all("iframe")
+                for iframe_el in iframe_elements:
+                    try:
+                        content_frame = await iframe_el.content_frame()
+                        if content_frame == frame:
+                            # Check aria-label
+                            aria_label = await iframe_el.get_attribute("aria-label")
+                            if aria_label == frame_selector:
+                                return frame
+
+                            # Check title
+                            title = await iframe_el.get_attribute("title")
+                            if title == frame_selector:
+                                return frame
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+
+    return None
+
+
+async def _get_available_frame_names(page: Page) -> list[str]:
+    """
+    Get list of available frame identifiers for error messages.
+
+    Args:
+        page: Playwright Page instance
+
+    Returns:
+        List of frame identifiers
+    """
+    names = ["main", "0"]
+
+    for index, frame in enumerate(page.frames):
+        if frame == page.main_frame:
+            continue
+
+        # Add name
+        if frame.name:
+            names.append(frame.name)
+
+        # Add aria-label and title from iframe element
+        if frame.parent_frame:
+            try:
+                iframe_elements = await frame.parent_frame.query_selector_all("iframe")
+                for iframe_el in iframe_elements:
+                    try:
+                        content_frame = await iframe_el.content_frame()
+                        if content_frame == frame:
+                            aria_label = await iframe_el.get_attribute("aria-label")
+                            if aria_label:
+                                names.append(aria_label)
+
+                            title = await iframe_el.get_attribute("title")
+                            if title:
+                                names.append(title)
+                            break
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+
+        # Add index
+        names.append(str(index))
+
+    return list(set(names))  # Remove duplicates
+
+
+@tool(
+    name="switch_to_frame",
+    description="Switch to a specific frame context for explicit targeting. Returns frame information including frame_selector for use with click/type_text frame parameter.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "frame_selector": {
+                "type": "string",
+                "description": 'Frame selector: "main" or "0" for main frame, frame name (e.g., "search-frame"), aria-label (e.g., "Yandex Search"), title, or index (e.g., "1", "2")',
+            },
+        },
+        "required": ["frame_selector"],
+    },
+)
+async def switch_to_frame(
+    page: Page,
+    frame_selector: str,
+) -> ToolResult:
+    """
+    Switch to a specific frame context for explicit frame targeting (FR-022).
+
+    Allows user to explicitly set frame context for subsequent operations.
+    Returns frame_selector recommendation for use with click/type_text frame parameter.
+
+    Args:
+        page: Playwright Page instance
+        frame_selector: Frame identifier ("main", name, aria-label, title, or index)
+
+    Returns:
+        ToolResult with frame_context and frame_selector recommendation
+
+    Examples:
+        >>> # Switch to search iframe
+        >>> result = await switch_to_frame(page, "search-frame")
+        >>> frame_selector = result.data["frame_selector"]
+        >>>
+        >>> # Use frame_selector with click
+        >>> await click(page, "Search button", frame=frame_selector)
+
+    Requirements: FR-022
+    """
+    try:
+        # Find the target frame
+        frame = await _find_frame_by_selector(page, frame_selector)
+        if frame is None:
+            available = await _get_available_frame_names(page)
+            return ToolResult(
+                success=False,
+                error=f"Frame '{frame_selector}' not found. Available frames: {', '.join(available)}",
+            )
+
+        # Check cross-origin accessibility
+        if is_cross_origin_frame(frame):
+            return ToolResult(
+                success=False,
+                error=f"Frame '{frame_selector}' is cross-origin and cannot be accessed due to same-origin policy.",
+            )
+
+        # Get frame context
+        frame_index = page.frames.index(frame)
+        frame_context = await _extract_frame_context(frame, frame_index, page)
+
+        # Count interactive elements in target frame
+        interactive_count = 0
+        try:
+            # Try to count interactive elements
+            buttons = await frame.query_selector_all("button")
+            inputs = await frame.query_selector_all("input")
+            links = await frame.query_selector_all("a")
+            interactive_count = len(buttons) + len(inputs) + len(links)
+        except Exception:
+            interactive_count = 0
+
+        # Determine best frame_selector for use with click/type_text
+        # Priority: aria-label > title > name > index (matches semantic priority)
+        recommended_selector = None
+        if frame_context.aria_label:
+            recommended_selector = frame_context.aria_label
+        elif frame_context.title:
+            recommended_selector = frame_context.title
+        elif frame_context.name:
+            recommended_selector = frame_context.name
+        else:
+            recommended_selector = str(frame_context.index)
+
+        data = {
+            "frame_context": frame_context.model_dump(),
+            "frame_selector": recommended_selector,
+            "interactive_element_count": interactive_count,
+            "message": f"Switched to frame '{frame_selector}'. Use frame='{recommended_selector}' for click/type_text operations.",
+        }
+
+        return ToolResult(success=True, data=data)
+
+    except Exception as e:
+        logger.error(f"Error switching to frame: {e}")
+        return ToolResult(
+            success=False,
+            error=f"Failed to switch to frame: {str(e)}",
+        )
 
 
 async def _wait_for_dynamic_iframes(

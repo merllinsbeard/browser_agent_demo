@@ -105,11 +105,11 @@
 
 ### Implementation for User Story 3
 
-- [ ] T024 [US3] Implement recursive frame traversal in get_accessibility_tree up to depth 3 (FR-005, FR-008) in src/browser_agent/tools/accessibility.py
-- [ ] T025 [US3] Add frame context metadata markers to merged accessibility tree (FR-006) in src/browser_agent/tools/accessibility.py
-- [ ] T026 [US3] Enhance find_interactive_elements to search all frames (FR-007) in src/browser_agent/tools/accessibility.py
-- [ ] T027 [US3] Implement get_frame_content tool for explicit frame content extraction (FR-023) in src/browser_agent/tools/frames.py
-- [ ] T028 [US3] Implement switch_to_frame tool for explicit context switching (FR-022) in src/browser_agent/tools/frames.py
+- [x] T024 [US3] Implement recursive frame traversal in get_accessibility_tree up to depth 3 (FR-005, FR-008) in src/browser_agent/tools/accessibility.py
+- [x] T025 [US3] Add frame context metadata markers to merged accessibility tree (FR-006) in src/browser_agent/tools/accessibility.py
+- [x] T026 [US3] Enhance find_interactive_elements to search all frames (FR-007) in src/browser_agent/tools/accessibility.py
+- [x] T027 [US3] Implement get_frame_content tool for explicit frame content extraction (FR-023) in src/browser_agent/tools/frames.py
+- [x] T028 [US3] Implement switch_to_frame tool for explicit context switching (FR-022) in src/browser_agent/tools/frames.py
 
 **Checkpoint**: User Story 3 complete - accessibility tree includes all frame contents
 

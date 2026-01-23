@@ -1353,3 +1353,476 @@ class TestIframeInterceptionDetection:
             assert interception is None
 
             await browser.close()
+
+
+class TestGetFrameContent:
+    """Test get_frame_content tool (T027)."""
+
+    @pytest.mark.asyncio
+    async def test_get_frame_content_text(self):
+        """Test extracting text content from iframe."""
+        from browser_agent.tools.frames import get_frame_content
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with iframe
+            await page.set_content("""
+                <html>
+                <body>
+                    <button>Main Button</button>
+                    <iframe id="test-frame" name="search-frame"></iframe>
+                    <script>
+                        const iframe = document.getElementById('test-frame');
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write('<html><body><h1>Search Results</h1><button>Iframe Button</button></body></html>');
+                        doc.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Get text content from iframe by name
+            result = await get_frame_content(page, "search-frame", "text")
+
+            assert result.success is True, f"get_frame_content should succeed: {result.error}"
+            assert "content" in result.data
+            assert "Search Results" in result.data["content"]
+            assert "Iframe Button" in result.data["content"]
+            assert result.data["content_type"] == "text"
+            assert result.data["frame_context"]["name"] == "search-frame"
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_get_frame_content_html(self):
+        """Test extracting HTML content from iframe."""
+        from browser_agent.tools.frames import get_frame_content
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with iframe
+            await page.set_content("""
+                <html>
+                <body>
+                    <iframe id="test-frame" name="content-frame"></iframe>
+                    <script>
+                        const iframe = document.getElementById('test-frame');
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write('<html><body><div class="result">Content</div></body></html>');
+                        doc.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Get HTML content from iframe
+            result = await get_frame_content(page, "content-frame", "html")
+
+            assert result.success is True
+            assert "content" in result.data
+            assert "<div" in result.data["content"]
+            assert "result" in result.data["content"]
+            assert result.data["content_type"] == "html"
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_get_frame_content_both(self):
+        """Test extracting both text and HTML from iframe."""
+        from browser_agent.tools.frames import get_frame_content
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with iframe
+            await page.set_content("""
+                <html>
+                <body>
+                    <iframe id="test-frame" name="data-frame"></iframe>
+                    <script>
+                        const iframe = document.getElementById('test-frame');
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write('<html><body><p>Data</p></body></html>');
+                        doc.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Get both text and HTML
+            result = await get_frame_content(page, "data-frame", "both")
+
+            assert result.success is True
+            assert "text" in result.data
+            assert "html" in result.data
+            assert "Data" in result.data["text"]
+            assert "<p>" in result.data["html"]
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_get_frame_content_by_index(self):
+        """Test selecting frame by index."""
+        from browser_agent.tools.frames import get_frame_content
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with iframe
+            await page.set_content("""
+                <html>
+                <body>
+                    <iframe id="test-frame" name="index-frame"></iframe>
+                    <script>
+                        const iframe = document.getElementById('test-frame');
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write('<html><body><span>Index Test</span></body></html>');
+                        doc.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Get content by index (iframe is at index 1, main frame is 0)
+            result = await get_frame_content(page, "1", "text")
+
+            assert result.success is True
+            assert "Index Test" in result.data["content"]
+            assert result.data["frame_context"]["index"] == 1
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_get_frame_content_main_shortcut(self):
+        """Test 'main' shortcut for main frame."""
+        from browser_agent.tools.frames import get_frame_content
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page
+            await page.set_content("""
+                <html>
+                <body>
+                    <h1>Main Page</h1>
+                    <button>Main Button</button>
+                </body>
+                </html>
+            """)
+
+            # Get main frame content using "main" shortcut
+            result = await get_frame_content(page, "main", "text")
+
+            assert result.success is True
+            assert "Main Page" in result.data["content"]
+            assert result.data["frame_context"]["index"] == 0
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_get_frame_content_not_found(self):
+        """Test error handling when frame not found."""
+        from browser_agent.tools.frames import get_frame_content
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page without iframes
+            await page.set_content("<html><body><button>Main</button></body></html>")
+
+            # Try to get non-existent frame
+            result = await get_frame_content(page, "nonexistent", "text")
+
+            assert result.success is False
+            assert "not found" in result.error.lower()
+            assert "Available frames" in result.error
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_get_frame_content_max_length(self):
+        """Test content truncation with max_length parameter."""
+        from browser_agent.tools.frames import get_frame_content
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with iframe containing long content using srcdoc for reliability
+            long_content = "A" * 20000
+            iframe_srcdoc = f'<html><body><p>{long_content}</p></body></html>'
+            await page.set_content(f'''
+                <html>
+                <body>
+                    <iframe id="test-frame" name="long-frame" srcdoc="{iframe_srcdoc}"></iframe>
+                </body>
+                </html>
+            ''')
+            # Wait for iframe to load
+            await page.wait_for_timeout(300)
+
+            # Get content with max_length=1000
+            result = await get_frame_content(page, "long-frame", "text", max_length=1000)
+
+            assert result.success is True
+            # Content should be truncated (much shorter than 20000)
+            assert len(result.data["content"]) < 20000
+            assert "truncated" in result.data["content"]
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_get_frame_content_by_aria_label(self):
+        """Test selecting frame by aria-label."""
+        from browser_agent.tools.frames import get_frame_content
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with iframe with aria-label using srcdoc for reliability
+            import html
+            # Add actual text content (h1) so innerText/textContent capture something
+            iframe_srcdoc = html.escape('<html><body><h1>Search Widget</h1><input type="text" placeholder="Search"/></body></html>', quote=True)
+            await page.set_content(f'''
+                <html>
+                <body>
+                    <iframe id="test-frame" name="generic-name" aria-label="Yandex Search" srcdoc="{iframe_srcdoc}"></iframe>
+                </body>
+                </html>
+            ''')
+            # Wait for iframe to load
+            await page.wait_for_timeout(300)
+
+            # Get content by aria-label
+            result = await get_frame_content(page, "Yandex Search", "text")
+
+            assert result.success is True
+            assert "Search" in result.data["content"]
+            assert result.data["frame_context"]["aria_label"] == "Yandex Search"
+
+            await browser.close()
+
+
+class TestSwitchToFrame:
+    """Test switch_to_frame tool (T028)."""
+
+    @pytest.mark.asyncio
+    async def test_switch_to_frame_by_name(self):
+        """Test switching to frame by name."""
+        from browser_agent.tools.frames import switch_to_frame
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with iframe
+            await page.set_content("""
+                <html>
+                <body>
+                    <button>Main</button>
+                    <iframe id="test-frame" name="search-frame"></iframe>
+                    <script>
+                        const iframe = document.getElementById('test-frame');
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write('<html><body><button>Iframe Button</button></body></html>');
+                        doc.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Switch to frame by name
+            result = await switch_to_frame(page, "search-frame")
+
+            assert result.success is True, f"switch_to_frame should succeed: {result.error}"
+            assert "frame_context" in result.data
+            assert "frame_selector" in result.data
+            assert result.data["frame_context"]["name"] == "search-frame"
+            assert result.data["interactive_element_count"] > 0
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_switch_to_frame_main(self):
+        """Test switching to main frame with 'main' or '0'."""
+        from browser_agent.tools.frames import switch_to_frame
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page
+            await page.set_content("""
+                <html>
+                <body>
+                    <button>Main Button</button>
+                    <input type="text"/>
+                </body>
+                </html>
+            """)
+
+            # Test "main" shortcut
+            result = await switch_to_frame(page, "main")
+
+            assert result.success is True
+            assert result.data["frame_context"]["index"] == 0
+            assert result.data["frame_selector"] == "0"  # Recommended selector
+
+            # Test "0" shortcut
+            result2 = await switch_to_frame(page, "0")
+
+            assert result2.success is True
+            assert result2.data["frame_context"]["index"] == 0
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_switch_to_frame_not_found(self):
+        """Test error handling with available frames list."""
+        from browser_agent.tools.frames import switch_to_frame
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page without iframes
+            await page.set_content("<html><body><button>Main</button></body></html>")
+
+            # Try to switch to non-existent frame
+            result = await switch_to_frame(page, "nonexistent")
+
+            assert result.success is False
+            assert "not found" in result.error.lower()
+            assert "Available frames" in result.error or "main" in result.error.lower()
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_switch_to_frame_by_aria_label(self):
+        """Test switching to frame by aria-label."""
+        from browser_agent.tools.frames import switch_to_frame
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with iframe with aria-label using srcdoc for reliability
+            import html
+            iframe_srcdoc = html.escape('<html><body><button>Widget Button</button></body></html>', quote=True)
+            await page.set_content(f'''
+                <html>
+                <body>
+                    <iframe id="test-frame" name="generic" aria-label="Search Widget" srcdoc="{iframe_srcdoc}"></iframe>
+                </body>
+                </html>
+            ''')
+            # Wait for iframe to load
+            await page.wait_for_timeout(300)
+
+            # Switch to frame by aria-label
+            result = await switch_to_frame(page, "Search Widget")
+
+            assert result.success is True
+            assert result.data["frame_context"]["aria_label"] == "Search Widget"
+            # Recommended selector should be aria-label (priority: aria-label > name > title > index)
+            assert result.data["frame_selector"] == "Search Widget"
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_switch_to_frame_returns_interactive_count(self):
+        """Test that switch_to_frame returns interactive element count."""
+        from browser_agent.tools.frames import switch_to_frame
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with iframe containing known number of interactive elements
+            await page.set_content("""
+                <html>
+                <body>
+                    <iframe id="test-frame" name="elements-frame"></iframe>
+                    <script>
+                        const iframe = document.getElementById('test-frame');
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write('<html><body><button id="b1">B1</button><button id="b2">B2</button><input type="text"/><a href="#">Link</a></body></html>');
+                        doc.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Switch to frame
+            result = await switch_to_frame(page, "elements-frame")
+
+            assert result.success is True
+            assert "interactive_element_count" in result.data
+            # Should count at least 4 interactive elements (2 buttons + 1 input + 1 link)
+            assert result.data["interactive_element_count"] >= 4
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_switch_to_frame_by_index(self):
+        """Test switching to frame by numeric index."""
+        from browser_agent.tools.frames import switch_to_frame
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with iframe
+            await page.set_content("""
+                <html>
+                <body>
+                    <button>Main</button>
+                    <iframe id="test-frame" name="index-frame"></iframe>
+                    <script>
+                        const iframe = document.getElementById('test-frame');
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write('<html><body><button>Iframe Button</button></body></html>');
+                        doc.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Switch to frame by index (iframe is at index 1)
+            result = await switch_to_frame(page, "1")
+
+            assert result.success is True
+            assert result.data["frame_context"]["index"] == 1
+            assert result.data["frame_context"]["name"] == "index-frame"
+
+            await browser.close()

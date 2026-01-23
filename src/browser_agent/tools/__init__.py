@@ -44,6 +44,8 @@ from .interactions import (
 )
 from .frames import (
     list_frames,
+    get_frame_content,
+    switch_to_frame,
 )
 from .base import ToolResult, tool, get_tool, get_all_tools, get_tool_schemas
 
@@ -77,6 +79,8 @@ __all__ = [
     "select_option",
     # Frames (002-iframe-interaction-fixes)
     "list_frames",
+    "get_frame_content",
+    "switch_to_frame",
     # Base
     "ToolResult",
     "tool",

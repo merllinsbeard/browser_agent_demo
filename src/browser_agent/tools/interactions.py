@@ -6,14 +6,18 @@ Implements user interaction tools for the browser automation agent:
 - FR-008: Type text into fields
 - FR-009: Scroll the page
 - FR-004, FR-010: Element search across all frames (iframes)
+- FR-015, FR-017: Click retry chain with coordinate_click fallback
+- FR-019: Structured error response with all attempts
+- FR-020: Configurable timeout_per_frame_ms
 """
 
 import logging
+import time
 from typing import Literal, Optional, Union
 from playwright.async_api import Page, Frame, Locator, TimeoutError as PlaywrightTimeoutError
 
 from .base import tool, ToolResult
-from .frame_models import FrameContext, FrameLocatorResult
+from .frame_models import FrameContext, FrameLocatorResult, RetryChain
 from .frames import (
     _prioritize_frames,
     _extract_frame_context,
@@ -178,6 +182,218 @@ async def _get_main_frame_context(page: Page) -> dict:
         accessible=True,
         parent_index=None,
     ).model_dump()
+
+
+def _build_retry_strategies(
+    page: Page,
+    element_description: str,
+    role: Optional[str] = None,
+    explicit_frame: Optional[str] = None,
+) -> list[str]:
+    """Build the list of retry strategies for click/type_text operations.
+
+    Constructs an ordered list of strategies to try:
+    1. If explicit frame specified: only that frame
+    2. If no explicit frame: main_frame -> prioritized iframes -> coordinate_click
+
+    Implements FR-015: Multi-strategy retry chain for element interaction.
+
+    Args:
+        page: Playwright Page instance
+        element_description: Description of element to interact with
+        role: Optional ARIA role filter
+        explicit_frame: Optional specific frame name/aria-label
+
+    Returns:
+        List of strategy names to try in order
+    """
+    if explicit_frame:
+        # Only try the specified frame
+        return [f"frame:{explicit_frame}"]
+
+    # Build prioritized frame list
+    strategies = ["main_frame"]
+
+    # Add prioritized iframes by semantic labels
+    frame_contexts = []
+    for index, frame in enumerate(page.frames):
+        if index == 0:  # Skip main frame
+            continue
+        ctx = FrameContext(
+            name=frame.name,
+            index=index,
+            src=frame.url,
+            aria_label=None,  # Will be populated if needed
+            title=None,
+            accessible=True,  # Assume accessible, will be checked during attempt
+            parent_index=None,
+        )
+        frame_contexts.append(ctx)
+
+    prioritized = _prioritize_frames(frame_contexts, include_inaccessible=False)
+
+    # Add iframe strategies in priority order
+    for frame_ctx in prioritized:
+        label = frame_ctx.aria_label or frame_ctx.title or frame_ctx.name
+        if label:
+            strategies.append(f"iframe:{label}")
+        else:
+            strategies.append(f"iframe:{frame_ctx.index}")
+
+    # Coordinate click is final fallback
+    strategies.append("coordinate_click")
+
+    return strategies
+
+
+async def _try_click_in_frame(
+    page: Page,
+    frame: Union[Page, Frame],
+    element_description: str,
+    role: Optional[str],
+    double_click: bool,
+    right_click: bool,
+    timeout_ms: int,
+) -> tuple[bool, Optional[str], Optional[dict], int]:
+    """Attempt a click operation in a specific frame.
+
+    Args:
+        page: Playwright Page instance
+        frame: Frame to search in
+        element_description: Element description
+        role: Optional ARIA role filter
+        double_click: Whether to double-click
+        right_click: Whether to right-click
+        timeout_ms: Timeout in milliseconds
+
+    Returns:
+        Tuple of (success, error_message, result_data, duration_ms)
+    """
+    start_time = time.time()
+
+    try:
+        locator, error = await _find_element_by_description(
+            frame, element_description, role
+        )
+
+        if locator is None:
+            duration_ms = int((time.time() - start_time) * 1000)
+            return False, error, None, duration_ms
+
+        # Ensure element is visible and clickable
+        await locator.wait_for(state="visible", timeout=timeout_ms)
+
+        # Get element info before clicking
+        tag_name = await locator.evaluate("el => el.tagName")
+        element_text = await locator.text_content() or ""
+        if len(element_text) > 50:
+            element_text = element_text[:47] + "..."
+
+        # Perform click
+        if double_click:
+            await locator.dblclick()
+            click_type = "double-clicked"
+        elif right_click:
+            await locator.click(button="right")
+            click_type = "right-clicked"
+        else:
+            await locator.click()
+            click_type = "clicked"
+
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        result_data = {
+            "action": click_type,
+            "element": element_description,
+            "tag": tag_name,
+            "text": element_text,
+        }
+
+        return True, None, result_data, duration_ms
+
+    except PlaywrightTimeoutError:
+        duration_ms = int((time.time() - start_time) * 1000)
+        return False, "Timeout waiting for element", None, duration_ms
+
+    except Exception as e:
+        duration_ms = int((time.time() - start_time) * 1000)
+        return False, str(e), None, duration_ms
+
+
+async def _try_type_in_frame(
+    page: Page,
+    frame: Union[Page, Frame],
+    element_description: str,
+    text: str,
+    clear_first: bool,
+    press_enter: bool,
+    timeout_ms: int,
+) -> tuple[bool, Optional[str], Optional[dict], int]:
+    """Attempt a type_text operation in a specific frame.
+
+    Args:
+        page: Playwright Page instance
+        frame: Frame to search in
+        element_description: Element description
+        text: Text to type
+        clear_first: Whether to clear field first
+        press_enter: Whether to press Enter after
+        timeout_ms: Timeout in milliseconds
+
+    Returns:
+        Tuple of (success, error_message, result_data, duration_ms)
+    """
+    start_time = time.time()
+
+    try:
+        # Try to find textbox first
+        locator, error = await _find_element_by_description(
+            frame, element_description, role="textbox"
+        )
+
+        if locator is None:
+            # Try without role restriction
+            locator, error = await _find_element_by_description(
+                frame, element_description
+            )
+
+        if locator is None:
+            duration_ms = int((time.time() - start_time) * 1000)
+            return False, error, None, duration_ms
+
+        # Ensure element is visible and editable
+        await locator.wait_for(state="visible", timeout=timeout_ms)
+
+        # Clear field if requested
+        if clear_first:
+            await locator.clear()
+
+        # Type text
+        await locator.fill(text)
+
+        # Press Enter if requested
+        if press_enter:
+            await locator.press("Enter")
+
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        result_data = {
+            "action": "typed",
+            "element": element_description,
+            "text": text if len(text) <= 50 else text[:47] + "...",
+            "text_entered": text,
+            "pressed_enter": press_enter,
+        }
+
+        return True, None, result_data, duration_ms
+
+    except PlaywrightTimeoutError:
+        duration_ms = int((time.time() - start_time) * 1000)
+        return False, "Timeout waiting for element", None, duration_ms
+
+    except Exception as e:
+        duration_ms = int((time.time() - start_time) * 1000)
+        return False, str(e), None, duration_ms
 
 
 async def _detect_iframe_interception(
@@ -396,6 +612,10 @@ async def _find_element_in_all_frames(
                 "type": "string",
                 "description": "Optional frame name/aria-label to search in. If not specified, searches all frames automatically.",
             },
+            "timeout_per_frame_ms": {
+                "type": "integer",
+                "description": "Timeout for each frame attempt in milliseconds (default: 10000)",
+            },
         },
         "required": ["element_description"],
     },
@@ -407,12 +627,16 @@ async def click(
     double_click: bool = False,
     right_click: bool = False,
     frame: Optional[str] = None,
+    timeout_per_frame_ms: int = 10000,
 ) -> ToolResult:
     """
-    Click on an element with automatic iframe search.
+    Click on an element with automatic iframe search and retry chain.
 
     Implements FR-013: click supports frame parameter and auto-search.
     Implements FR-011: Returns frame_context in ToolResult.data.
+    Implements FR-015, FR-017: Multi-strategy retry chain with coordinate_click fallback.
+    Implements FR-019: Structured error response with all attempts.
+    Implements FR-020: Configurable timeout_per_frame_ms.
 
     Args:
         page: Playwright Page instance
@@ -421,193 +645,270 @@ async def click(
         double_click: Whether to double-click
         right_click: Whether to right-click
         frame: Optional frame name/aria-label to search in
+        timeout_per_frame_ms: Timeout for each frame attempt (default 10000)
 
     Returns:
-        ToolResult indicating success or failure with frame_context
+        ToolResult indicating success or failure with frame_context and retry info
     """
-    frame_context = None
+    # Build retry strategies
+    strategies = _build_retry_strategies(page, element_description, role, frame)
 
-    try:
-        # If explicit frame specified, search only in that frame
-        if frame:
-            target_frame = None
-            for f in page.frames:
-                if f.name == frame:
-                    target_frame = f
-                    break
-            if target_frame is None:
-                # Try matching by checking if page has frame with aria-label
-                # Build frame contexts to find by aria-label
+    # Create RetryChain with FR-020 configurable timeout
+    retry_chain = RetryChain(
+        strategies=strategies,
+        max_attempts=len(strategies),
+        timeout_per_frame_ms=timeout_per_frame_ms,
+    )
+
+    logger.info(
+        f"[Retry Chain] Starting click for '{element_description}' "
+        f"with {len(strategies)} strategies: {strategies}"
+    )
+
+    # Try each strategy in sequence
+    while not retry_chain.is_exhausted:
+        strategy = retry_chain.current_strategy
+        start_time = time.time()
+
+        logger.info(f"[Retry Chain] Attempting strategy {retry_chain.current_index + 1}/{len(strategies)}: {strategy}")
+
+        try:
+            # Parse strategy and execute appropriate click method
+            if strategy == "main_frame":
+                success, error, result_data, duration_ms = await _try_click_in_frame(
+                    page,
+                    page.main_frame,
+                    element_description,
+                    role,
+                    double_click,
+                    right_click,
+                    retry_chain.timeout_per_frame_ms,
+                )
+
+                # Get main frame context
+                frame_ctx = await _get_main_frame_context(page)
+
+                if success:
+                    retry_chain.add_attempt(
+                        strategy=strategy,
+                        success=True,
+                        duration_ms=duration_ms,
+                        error=None,
+                        frame_context=FrameContext(**frame_ctx),
+                    )
+                    result_data["frame_context"] = frame_ctx
+                    result_data["retry_chain"] = retry_chain.to_error_dict()
+
+                    logger.info(f"[Retry Chain] Strategy '{strategy}' succeeded in {duration_ms}ms")
+
+                    return ToolResult(
+                        success=True,
+                        data=result_data,
+                        metadata={
+                            "description": element_description,
+                            "role": role,
+                            "frame": frame,
+                        },
+                    )
+                else:
+                    # Record failed attempt
+                    retry_chain.add_attempt(
+                        strategy=strategy,
+                        success=False,
+                        duration_ms=duration_ms,
+                        error=error,
+                        frame_context=FrameContext(**frame_ctx),
+                    )
+                    logger.warning(f"[Retry Chain] Strategy '{strategy}' failed: {error}")
+                    retry_chain.advance()
+                    continue
+
+            elif strategy.startswith("iframe:"):
+                # Extract frame identifier
+                frame_id = strategy[len("iframe:"):]
+                target_frame = None
+                frame_ctx = None
+
+                # Find frame by name, aria-label, title, or index
                 for idx, f in enumerate(page.frames):
                     ctx = await _extract_frame_context(f, idx, page)
-                    if ctx.aria_label == frame or ctx.title == frame:
+                    if (
+                        f.name == frame_id
+                        or ctx.aria_label == frame_id
+                        or ctx.title == frame_id
+                        or str(idx) == frame_id
+                    ):
                         target_frame = f
-                        frame_context = ctx.model_dump()
+                        frame_ctx = ctx
                         break
 
-            if target_frame is None:
-                return ToolResult(
-                    success=False,
-                    error=f"Frame '{frame}' not found",
-                    metadata={"description": element_description, "frame": frame},
+                if target_frame is None:
+                    duration_ms = int((time.time() - start_time) * 1000)
+                    retry_chain.add_attempt(
+                        strategy=strategy,
+                        success=False,
+                        duration_ms=duration_ms,
+                        error=f"Frame '{frame_id}' not found",
+                        frame_context=None,
+                    )
+                    logger.warning(f"[Retry Chain] Strategy '{strategy}' failed: Frame not found")
+                    retry_chain.advance()
+                    continue
+
+                # Try clicking in the iframe
+                success, error, result_data, duration_ms = await _try_click_in_frame(
+                    page,
+                    target_frame,
+                    element_description,
+                    role,
+                    double_click,
+                    right_click,
+                    retry_chain.timeout_per_frame_ms,
                 )
 
-            locator, error = await _find_element_by_description(
-                target_frame, element_description, role
-            )
-        else:
-            # Auto-search across all frames (FR-013)
-            result = await _find_element_in_all_frames(
-                page, element_description, role
-            )
-
-            if not result.found:
-                return ToolResult(
-                    success=False,
-                    error=f"Could not find element matching: '{element_description}'",
-                    metadata={"description": element_description, "role": role},
-                )
-
-            locator = result.locator
-            if result.frame_context:
-                frame_context = result.frame_context.model_dump()
-                # FR-016: Log frame context for click operation
-                if result.frame_context.index != 0:
-                    frame_label = (
-                        result.frame_context.aria_label
-                        or result.frame_context.title
-                        or result.frame_context.name
+                if success:
+                    retry_chain.add_attempt(
+                        strategy=strategy,
+                        success=True,
+                        duration_ms=duration_ms,
+                        error=None,
+                        frame_context=frame_ctx,
                     )
-                    logger.info(
-                        f"[Frame Context] click will operate in iframe {result.frame_context.index} "
-                        f"(label: {frame_label or 'none'})"
+                    result_data["frame_context"] = frame_ctx.model_dump()
+                    result_data["retry_chain"] = retry_chain.to_error_dict()
+
+                    logger.info(f"[Retry Chain] Strategy '{strategy}' succeeded in {duration_ms}ms")
+
+                    return ToolResult(
+                        success=True,
+                        data=result_data,
+                        metadata={
+                            "description": element_description,
+                            "role": role,
+                            "frame": frame,
+                        },
+                    )
+                else:
+                    # Record failed attempt
+                    retry_chain.add_attempt(
+                        strategy=strategy,
+                        success=False,
+                        duration_ms=duration_ms,
+                        error=error,
+                        frame_context=frame_ctx,
+                    )
+                    logger.warning(f"[Retry Chain] Strategy '{strategy}' failed: {error}")
+                    retry_chain.advance()
+                    continue
+
+            elif strategy == "coordinate_click":
+                # Coordinate click fallback - need to find element first
+                locator = None
+                frame_ctx = None
+
+                # Try to find element in any frame for coordinate calculation
+                for idx, f in enumerate(page.frames):
+                    loc, err = await _find_element_by_description(f, element_description, role)
+                    if loc is not None:
+                        locator = loc
+                        frame_ctx = await _extract_frame_context(f, idx, page)
+                        break
+
+                if locator is None:
+                    duration_ms = int((time.time() - start_time) * 1000)
+                    retry_chain.add_attempt(
+                        strategy=strategy,
+                        success=False,
+                        duration_ms=duration_ms,
+                        error="Could not find element for coordinate click",
+                        frame_context=None,
+                    )
+                    logger.warning(f"[Retry Chain] Strategy '{strategy}' failed: Element not found")
+                    retry_chain.advance()
+                    continue
+
+                # Try coordinate click
+                coord_result = await coordinate_click(page, locator)
+                duration_ms = int((time.time() - start_time) * 1000)
+
+                if coord_result.success:
+                    retry_chain.add_attempt(
+                        strategy=strategy,
+                        success=True,
+                        duration_ms=duration_ms,
+                        error=None,
+                        frame_context=frame_ctx,
                     )
 
-        if locator is None:
-            return ToolResult(
+                    logger.info(f"[Retry Chain] Strategy '{strategy}' succeeded in {duration_ms}ms")
+
+                    # Get main frame context if none available
+                    if frame_ctx is None:
+                        frame_ctx = FrameContext(**(await _get_main_frame_context(page)))
+
+                    return ToolResult(
+                        success=True,
+                        data={
+                            "action": "coordinate-clicked",
+                            "element": element_description,
+                            "method": "retry_chain",
+                            "click_type": "coordinate-clicked",
+                            "frame_context": frame_ctx.model_dump(),
+                            "coordinates": {
+                                "x": coord_result.data.get("center_x"),
+                                "y": coord_result.data.get("center_y"),
+                            },
+                            "bounding_box": coord_result.data.get("bounding_box"),
+                            "retry_chain": retry_chain.to_error_dict(),
+                        },
+                        metadata={
+                            "description": element_description,
+                            "role": role,
+                            "frame": frame,
+                        },
+                    )
+                else:
+                    # Record failed attempt
+                    retry_chain.add_attempt(
+                        strategy=strategy,
+                        success=False,
+                        duration_ms=duration_ms,
+                        error=coord_result.error,
+                        frame_context=frame_ctx,
+                    )
+                    logger.warning(f"[Retry Chain] Strategy '{strategy}' failed: {coord_result.error}")
+                    retry_chain.advance()
+                    continue
+
+        except Exception as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            retry_chain.add_attempt(
+                strategy=strategy,
                 success=False,
-                error=f"Could not find element matching: '{element_description}'",
-                metadata={"description": element_description, "frame": frame},
+                duration_ms=duration_ms,
+                error=str(e),
+                frame_context=None,
             )
+            logger.warning(f"[Retry Chain] Strategy '{strategy}' raised exception: {e}")
+            retry_chain.advance()
+            continue
 
-        # Ensure element is visible and clickable
-        await locator.wait_for(state="visible", timeout=5000)
+    # All strategies exhausted - return structured error (FR-019)
+    logger.error(f"[Retry Chain] All {len(strategies)} strategies exhausted for '{element_description}'")
 
-        # Get element info before clicking
-        tag_name = await locator.evaluate("el => el.tagName")
-        element_text = await locator.text_content() or ""
-        if len(element_text) > 50:
-            element_text = element_text[:47] + "..."
-
-        # Perform click
-        if double_click:
-            await locator.dblclick()
-            click_type = "double-clicked"
-        elif right_click:
-            await locator.click(button="right")
-            click_type = "right-clicked"
-        else:
-            await locator.click()
-            click_type = "clicked"
-
-        # If frame_context not set (explicit frame search), get main frame context
-        if frame_context is None:
-            frame_context = await _get_main_frame_context(page)
-
-        return ToolResult(
-            success=True,
-            data={
-                "action": click_type,
-                "element": element_description,
-                "tag": tag_name,
-                "text": element_text,
-                "frame_context": frame_context,  # FR-011: Include frame context
-            },
-            metadata={
-                "description": element_description,
-                "role": role,
-                "frame": frame,
-            },
-        )
-
-    except PlaywrightTimeoutError:
-        # FR-018, FR-015, FR-017: Click retry chain with coordinate_click fallback
-        interception_frame = await _detect_iframe_interception(page, locator)
-
-        # FR-017: Retry chain - attempt coordinate_click fallback
-        logger.info("[Retry Chain] Attempting coordinate_click fallback...")
-
-        # Call coordinate_click on the original locator
-        fallback_result = await coordinate_click(page, locator, element_description)
-
-        if fallback_result.success:
-            # Fallback succeeded - return success with retry chain info
-            click_coords = fallback_result.data
-
-            logger.info(
-                f"[Retry Chain] coordinate_click succeeded at "
-                f"({click_coords.get('center_x')}, {click_coords.get('center_y')})"
-            )
-
-            # Get frame context for the result
-            if frame_context is None:
-                frame_context = await _get_main_frame_context(page)
-
-            return ToolResult(
-                success=True,
-                data={
-                    "action": "coordinate-clicked",
-                    "element": element_description,
-                    "method": "retry_chain",
-                    "click_type": "coordinate-clicked",
-                    "frame_context": frame_context,
-                    "coordinates": {
-                        "x": click_coords.get("center_x"),
-                        "y": click_coords.get("center_y"),
-                    },
-                    "bounding_box": click_coords.get("bounding_box"),
-                    "retry_chain": {
-                        "initial_strategy": "standard_click",
-                        "fallback_used": "coordinate_click",
-                        "interception_detected": interception_frame is not None,
-                        "overlapping_frame": interception_frame.model_dump() if interception_frame else None,
-                    },
-                },
-                metadata={
-                    "description": element_description,
-                    "role": role,
-                    "frame": frame,
-                },
-            )
-        else:
-            # Fallback also failed - return structured error with full retry chain info
-            logger.warning(f"[Retry Chain] coordinate_click fallback failed: {fallback_result.error}")
-
-            return ToolResult(
-                success=False,
-                error=(
-                    "Click failed after retry chain: "
-                    "standard click timed out, coordinate_click fallback also failed"
-                ),
-                data={
-                    "retry_chain": {
-                        "initial_strategy": "standard_click",
-                        "fallback_attempted": "coordinate_click",
-                        "fallback_error": fallback_result.error or "Unknown error",
-                        "interception_detected": interception_frame is not None,
-                        "overlapping_frame": interception_frame.model_dump() if interception_frame else None,
-                    },
-                    "element_description": element_description,
-                },
-                metadata={"description": element_description, "frame": frame},
-            )
-
-    except Exception as e:
-        return ToolResult(
-            success=False,
-            error=f"Click failed: {e!s}",
-            metadata={"description": element_description, "frame": frame},
-        )
+    return ToolResult(
+        success=False,
+        error=f"Click failed after {len(strategies)} attempts",
+        data={
+            "retry_chain": retry_chain.to_error_dict(),
+            "element_description": element_description,
+        },
+        metadata={
+            "description": element_description,
+            "role": role,
+            "frame": frame,
+        },
+    )
 
 
 @tool(
@@ -636,6 +937,10 @@ async def click(
                 "type": "string",
                 "description": "Optional frame name/aria-label to search in. If not specified, searches all frames automatically.",
             },
+            "timeout_per_frame_ms": {
+                "type": "integer",
+                "description": "Timeout for each frame attempt in milliseconds (default: 10000)",
+            },
         },
         "required": ["element_description", "text"],
     },
@@ -647,12 +952,16 @@ async def type_text(
     clear_first: bool = True,
     press_enter: bool = False,
     frame: Optional[str] = None,
+    timeout_per_frame_ms: int = 10000,
 ) -> ToolResult:
     """
-    Type text into an input field with automatic iframe search.
+    Type text into an input field with automatic iframe search and retry chain.
 
     Implements FR-014: type_text supports frame parameter and auto-search.
     Implements FR-011: Returns frame_context in ToolResult.data.
+    Implements FR-015, FR-017: Multi-strategy retry chain for element interaction.
+    Implements FR-019: Structured error response with all attempts.
+    Implements FR-020: Configurable timeout_per_frame_ms.
 
     Args:
         page: Playwright Page instance
@@ -661,122 +970,192 @@ async def type_text(
         clear_first: Whether to clear field first
         press_enter: Whether to press Enter after
         frame: Optional frame name/aria-label to search in
+        timeout_per_frame_ms: Timeout for each frame attempt (default 10000)
 
     Returns:
-        ToolResult indicating success or failure with frame_context
+        ToolResult indicating success or failure with frame_context and retry info
     """
-    frame_context = None
+    # Build retry strategies (note: type_text doesn't use coordinate_click fallback)
+    strategies = _build_retry_strategies(page, element_description, None, frame)
+    # Remove coordinate_click from strategies for type_text
+    strategies = [s for s in strategies if not s.startswith("coordinate")]
 
-    try:
-        # If explicit frame specified, search only in that frame
-        if frame:
-            target_frame = None
-            for f in page.frames:
-                if f.name == frame:
-                    target_frame = f
-                    break
-            if target_frame is None:
-                # Try matching by checking if page has frame with aria-label
-                # Build frame contexts to find by aria-label
+    # Create RetryChain with FR-020 configurable timeout
+    retry_chain = RetryChain(
+        strategies=strategies,
+        max_attempts=len(strategies),
+        timeout_per_frame_ms=timeout_per_frame_ms,
+    )
+
+    logger.info(
+        f"[Retry Chain] Starting type_text for '{element_description}' "
+        f"with {len(strategies)} strategies: {strategies}"
+    )
+
+    # Try each strategy in sequence
+    while not retry_chain.is_exhausted:
+        strategy = retry_chain.current_strategy
+        start_time = time.time()
+
+        logger.info(f"[Retry Chain] Attempting strategy {retry_chain.current_index + 1}/{len(strategies)}: {strategy}")
+
+        try:
+            # Parse strategy and execute appropriate type_text method
+            if strategy == "main_frame":
+                success, error, result_data, duration_ms = await _try_type_in_frame(
+                    page,
+                    page.main_frame,
+                    element_description,
+                    text,
+                    clear_first,
+                    press_enter,
+                    retry_chain.timeout_per_frame_ms,
+                )
+
+                # Get main frame context
+                frame_ctx = await _get_main_frame_context(page)
+
+                if success:
+                    retry_chain.add_attempt(
+                        strategy=strategy,
+                        success=True,
+                        duration_ms=duration_ms,
+                        error=None,
+                        frame_context=FrameContext(**frame_ctx),
+                    )
+                    result_data["frame_context"] = frame_ctx
+                    result_data["retry_chain"] = retry_chain.to_error_dict()
+
+                    logger.info(f"[Retry Chain] Strategy '{strategy}' succeeded in {duration_ms}ms")
+
+                    return ToolResult(
+                        success=True,
+                        data=result_data,
+                        metadata={
+                            "description": element_description,
+                            "full_text_length": len(text),
+                            "frame": frame,
+                        },
+                    )
+                else:
+                    # Record failed attempt
+                    retry_chain.add_attempt(
+                        strategy=strategy,
+                        success=False,
+                        duration_ms=duration_ms,
+                        error=error,
+                        frame_context=FrameContext(**frame_ctx),
+                    )
+                    logger.warning(f"[Retry Chain] Strategy '{strategy}' failed: {error}")
+                    retry_chain.advance()
+                    continue
+
+            elif strategy.startswith("iframe:"):
+                # Extract frame identifier
+                frame_id = strategy[len("iframe:"):]
+                target_frame = None
+                frame_ctx = None
+
+                # Find frame by name, aria-label, title, or index
                 for idx, f in enumerate(page.frames):
                     ctx = await _extract_frame_context(f, idx, page)
-                    if ctx.aria_label == frame or ctx.title == frame:
+                    if (
+                        f.name == frame_id
+                        or ctx.aria_label == frame_id
+                        or ctx.title == frame_id
+                        or str(idx) == frame_id
+                    ):
                         target_frame = f
-                        frame_context = ctx.model_dump()
+                        frame_ctx = ctx
                         break
 
-            if target_frame is None:
-                return ToolResult(
-                    success=False,
-                    error=f"Frame '{frame}' not found",
-                    metadata={"description": element_description, "frame": frame},
-                )
-
-            locator, error = await _find_element_by_description(
-                target_frame, element_description, role="textbox"
-            )
-            if locator is None:
-                locator, error = await _find_element_by_description(
-                    target_frame, element_description
-                )
-        else:
-            # Auto-search across all frames (FR-014)
-            result = await _find_element_in_all_frames(
-                page, element_description, role="textbox"
-            )
-
-            if not result.found:
-                # Try without role restriction
-                result = await _find_element_in_all_frames(
-                    page, element_description
-                )
-
-            if not result.found:
-                return ToolResult(
-                    success=False,
-                    error=f"Could not find element matching: '{element_description}'",
-                    metadata={"description": element_description},
-                )
-
-            locator = result.locator
-            if result.frame_context:
-                frame_context = result.frame_context.model_dump()
-                # FR-016: Log frame context for type_text operation
-                if result.frame_context.index != 0:
-                    frame_label = (
-                        result.frame_context.aria_label
-                        or result.frame_context.title
-                        or result.frame_context.name
+                if target_frame is None:
+                    duration_ms = int((time.time() - start_time) * 1000)
+                    retry_chain.add_attempt(
+                        strategy=strategy,
+                        success=False,
+                        duration_ms=duration_ms,
+                        error=f"Frame '{frame_id}' not found",
+                        frame_context=None,
                     )
-                    logger.info(
-                        f"[Frame Context] type_text will operate in iframe {result.frame_context.index} "
-                        f"(label: {frame_label or 'none'})"
-                    )
+                    logger.warning(f"[Retry Chain] Strategy '{strategy}' failed: Frame not found")
+                    retry_chain.advance()
+                    continue
 
-        if locator is None:
-            return ToolResult(
+                # Try typing in the iframe
+                success, error, result_data, duration_ms = await _try_type_in_frame(
+                    page,
+                    target_frame,
+                    element_description,
+                    text,
+                    clear_first,
+                    press_enter,
+                    retry_chain.timeout_per_frame_ms,
+                )
+
+                if success:
+                    retry_chain.add_attempt(
+                        strategy=strategy,
+                        success=True,
+                        duration_ms=duration_ms,
+                        error=None,
+                        frame_context=frame_ctx,
+                    )
+                    result_data["frame_context"] = frame_ctx.model_dump()
+                    result_data["retry_chain"] = retry_chain.to_error_dict()
+
+                    logger.info(f"[Retry Chain] Strategy '{strategy}' succeeded in {duration_ms}ms")
+
+                    return ToolResult(
+                        success=True,
+                        data=result_data,
+                        metadata={
+                            "description": element_description,
+                            "full_text_length": len(text),
+                            "frame": frame,
+                        },
+                    )
+                else:
+                    # Record failed attempt
+                    retry_chain.add_attempt(
+                        strategy=strategy,
+                        success=False,
+                        duration_ms=duration_ms,
+                        error=error,
+                        frame_context=frame_ctx,
+                    )
+                    logger.warning(f"[Retry Chain] Strategy '{strategy}' failed: {error}")
+                    retry_chain.advance()
+                    continue
+
+        except Exception as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            retry_chain.add_attempt(
+                strategy=strategy,
                 success=False,
-                error=f"Could not find element matching: '{element_description}'",
-                metadata={"description": element_description, "frame": frame},
+                duration_ms=duration_ms,
+                error=str(e),
+                frame_context=None,
             )
+            logger.warning(f"[Retry Chain] Strategy '{strategy}' raised exception: {e}")
+            retry_chain.advance()
+            continue
 
-        # Ensure element is visible and editable
-        await locator.wait_for(state="visible", timeout=5000)
+    # All strategies exhausted - return structured error (FR-019)
+    logger.error(f"[Retry Chain] All {len(strategies)} strategies exhausted for '{element_description}'")
 
-        # Clear field if requested
-        if clear_first:
-            await locator.clear()
-
-        # Type text
-        await locator.fill(text)
-
-        # Press Enter if requested
-        if press_enter:
-            await locator.press("Enter")
-
-        return ToolResult(
-            success=True,
-            data={
-                "action": "typed",
-                "element": element_description,
-                "text": text if len(text) <= 50 else text[:47] + "...",
-                "text_entered": text,  # Full text for verification
-                "pressed_enter": press_enter,
-                "frame_context": frame_context,  # FR-011: Include frame context
-            },
-            metadata={
-                "description": element_description,
-                "full_text_length": len(text),
-                "frame": frame,
-            },
-        )
-
-    except Exception as e:
-        return ToolResult(
-            success=False,
-            error=f"Type failed: {e!s}",
-            metadata={"description": element_description, "frame": frame},
-        )
+    return ToolResult(
+        success=False,
+        error=f"Type text failed after {len(strategies)} attempts",
+        data={
+            "retry_chain": retry_chain.to_error_dict(),
+            "element_description": element_description,
+        },
+        metadata={
+            "description": element_description,
+            "frame": frame,
+        },
+    )
 
 
 @tool(

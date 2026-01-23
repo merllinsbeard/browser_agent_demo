@@ -128,10 +128,10 @@
 
 ### Implementation for User Story 4
 
-- [ ] T031 [US4] Implement RetryChain state machine with strategy progression in src/browser_agent/tools/interactions.py
-- [ ] T032 [US4] Add InteractionAttempt tracking to click and type_text tools in src/browser_agent/tools/interactions.py
-- [ ] T033 [US4] Return structured error with attempts[] array on final failure (FR-019) in src/browser_agent/tools/interactions.py
-- [ ] T034 [US4] Add configurable timeout_per_frame_ms parameter (FR-020, default 10000) in src/browser_agent/tools/interactions.py
+- [x] T031 [US4] Implement RetryChain state machine with strategy progression in src/browser_agent/tools/interactions.py
+- [x] T032 [US4] Add InteractionAttempt tracking to click and type_text tools in src/browser_agent/tools/interactions.py
+- [x] T033 [US4] Return structured error with attempts[] array on final failure (FR-019) in src/browser_agent/tools/interactions.py
+- [x] T034 [US4] Add configurable timeout_per_frame_ms parameter (FR-020, default 10000) in src/browser_agent/tools/interactions.py
 
 **Checkpoint**: User Story 4 complete - full retry chain with detailed error reporting
 

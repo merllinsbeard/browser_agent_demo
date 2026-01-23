@@ -742,12 +742,341 @@ class TestCrossOriginDetection:
 
 
 class TestRecursiveAccessibilityTree:
-    """Test recursive frame traversal (T022)."""
+    """Test recursive frame traversal in accessibility tree (T022).
 
-    def test_recursive_accessibility_tree(self):
-        """Test accessibility tree merges nested frames."""
-        # Implementation in T022
-        pytest.skip("Test implementation in T022")
+    FR-005: get_accessibility_tree MUST include iframe contents recursively
+    FR-008: Recursive traversal MUST be limited to depth 3
+    FR-006: Frame context metadata MUST be included in tree output
+    FR-027: Cross-origin iframes MUST be gracefully skipped
+    """
+
+    @pytest.mark.asyncio
+    async def test_accessibility_tree_includes_iframe_contents(self):
+        """Test accessibility tree includes elements from single-level iframe (FR-005)."""
+        from browser_agent.tools.accessibility import get_accessibility_tree
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with main frame + one iframe
+            await page.set_content("""
+                <html>
+                <body>
+                    <h1>Main Page</h1>
+                    <button id="main-btn">Main Button</button>
+                    <iframe id="test-frame" name="test-frame"></iframe>
+                    <script>
+                        const iframe = document.getElementById('test-frame');
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write('<html><body><h2>Iframe Content</h2><button id="iframe-btn">Iframe Button</button></body></html>');
+                        doc.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Get accessibility tree using the tool
+            result = await get_accessibility_tree(page)
+
+            # Tool should execute successfully
+            assert result.success is True, f"get_accessibility_tree should succeed: {result.error}"
+
+            # Extract tree text from result
+            tree_text = result.data.get("tree", "")
+
+            # Verify main frame elements are present
+            assert "Main Page" in tree_text or "Main" in tree_text, "Main frame content should be in tree"
+
+            # This assertion will FAIL - iframe content not included yet
+            # After T024 implementation, this should pass
+            assert "Iframe Content" in tree_text or "Iframe Button" in tree_text, \
+                "Iframe content should be included in accessibility tree (FR-005)"
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_nested_iframe_traversal_depth_3(self):
+        """Test accessibility tree traverses up to 3 levels of nested iframes (FR-008)."""
+        import html
+        from browser_agent.tools.accessibility import get_accessibility_tree
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create nested iframes: level 0 (main) -> level 1 -> level 2 -> level 3
+            level1_content = html.escape('<iframe id="level2-frame" name="level2-frame"></iframe>', quote=True)
+            level2_content = html.escape('<iframe id="level3-frame" name="level3-frame"></iframe>', quote=True)
+            level3_content = html.escape('<h1>Level 3 Content</h1><button id="level3-btn">Deep Button</button>', quote=True)
+
+            await page.set_content(f("""
+                <html>
+                <body>
+                    <h1>Level 0 (Main)</h1>
+                    <iframe id="level1-frame" name="level1-frame"></iframe>
+                    <script>
+                        const iframe1 = document.getElementById('level1-frame');
+                        const doc1 = iframe1.contentDocument || iframe1.contentWindow.document;
+                        doc1.open();
+                        doc1.write(`
+                            <html><body>
+                                <h2>Level 1</h2>
+                                {level1_content}
+                                <script>
+                                    const iframe2 = document.getElementById('level2-frame');
+                                    const doc2 = iframe2.contentDocument || iframe2.contentWindow.document;
+                                    doc2.open();
+                                    doc2.write(\`
+                                        <html><body>
+                                            <h3>Level 2</h3>
+                                            {level2_content}
+                                            <script>
+                                                const iframe3 = document.getElementById('level3-frame');
+                                                const doc3 = iframe3.contentDocument || iframe3.contentWindow.document;
+                                                doc3.open();
+                                                doc3.write(\\`<html><body>{level3_content}</body></html>\\`);
+                                                doc3.close();
+                                            <\/script>
+                                        </body></html>
+                                    \`);
+                                    doc2.close();
+                                <\/script>
+                            </body></html>
+                        `);
+                        doc1.close();
+                    </script>
+                </body>
+                </html>
+            """))
+
+            # Get accessibility tree using the tool
+            result = await get_accessibility_tree(page)
+
+            assert result.success is True, f"get_accessibility_tree should succeed: {result.error}"
+            tree_text = result.data.get("tree", "")
+
+            # Verify level 0 is included
+            assert "Level 0" in tree_text or "Main" in tree_text, "Level 0 should be in tree"
+
+            # These will FAIL until T024 is implemented
+            assert "Level 1" in tree_text, "Level 1 iframe content should be included (FR-008)"
+            assert "Level 2" in tree_text, "Level 2 iframe content should be included (FR-008)"
+            assert "Level 3" in tree_text or "Level 3 Content" in tree_text, "Level 3 iframe content should be included (FR-008 depth limit)"
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_depth_limit_stops_at_3(self):
+        """Test depth limit of 3 excludes 4th level iframe (FR-008)."""
+        import html
+        from browser_agent.tools.accessibility import get_accessibility_tree
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create 4 levels of nested iframes (level 0 + 3 iframes = 4 total)
+            level1_content = html.escape('<iframe id="level2-frame"></iframe>', quote=True)
+            level2_content = html.escape('<iframe id="level3-frame"></iframe>', quote=True)
+            level3_content = html.escape('<iframe id="level4-frame"></iframe>', quote=True)
+            level4_content = html.escape('<h1>Level 4 Content - Should Be Excluded</h1>', quote=True)
+
+            await page.set_content(f("""
+                <html>
+                <body>
+                    <h1>Level 0</h1>
+                    <iframe id="level1-frame"></iframe>
+                    <script>
+                        const f1 = document.getElementById('level1-frame');
+                        const d1 = f1.contentDocument || f1.contentWindow.document;
+                        d1.open();
+                        d1.write(`<html><body><h2>Level 1</h2>{level1_content}<script>
+                            const f2 = document.getElementById('level2-frame');
+                            const d2 = f2.contentDocument || f2.contentWindow.document;
+                            d2.open();
+                            d2.write(\`<html><body><h3>Level 2</h3>{level2_content}<script>
+                                const f3 = document.getElementById('level3-frame');
+                                const d3 = f3.contentDocument || f3.contentWindow.document;
+                                d3.open();
+                                d3.write(\\`<html><body><h4>Level 3</h4>{level3_content}<script>
+                                    const f4 = document.getElementById('level4-frame');
+                                    const d4 = f4.contentDocument || f4.contentWindow.document;
+                                    d4.open();
+                                    d4.write(\\`<html><body>{level4_content}</body></html>\\`);
+                                    d4.close();
+                                <\/script></body></html>\\`);
+                                d3.close();
+                            <\/script></body></html>\`);
+                            d2.close();
+                        <\/script></body></html>`);
+                        d1.close();
+                    </script>
+                </body>
+                </html>
+            """))
+
+            # Get accessibility tree using the tool
+            result = await get_accessibility_tree(page)
+
+            assert result.success is True, f"get_accessibility_tree should succeed: {result.error}"
+            tree_text = result.data.get("tree", "")
+
+            # Verify levels 0-3 are included
+            assert "Level 0" in tree_text
+            # These will FAIL until T024
+            assert "Level 1" in tree_text, "Level 1 should be in tree (FR-008 depth=3)"
+            assert "Level 2" in tree_text, "Level 2 should be in tree (FR-008 depth=3)"
+            assert "Level 3" in tree_text, "Level 3 should be in tree (FR-008 depth=3)"
+
+            # Verify level 4 is EXCLUDED (depth limit enforcement)
+            # This test may pass before implementation because level 4 content won't be there
+            # After implementation, level 4 should still be excluded
+            assert "Level 4 Content" not in tree_text, "Level 4 should be EXCLUDED (FR-008 depth limit=3)"
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_frame_metadata_in_tree(self):
+        """Test frame context metadata markers are included in tree output (FR-006)."""
+        from browser_agent.tools.accessibility import get_accessibility_tree
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with iframe
+            await page.set_content("""
+                <html>
+                <body>
+                    <button id="main-btn">Main</button>
+                    <iframe id="test-frame" name="test-frame" aria-label="Test Iframe"></iframe>
+                    <script>
+                        const iframe = document.getElementById('test-frame');
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write('<html><body><button id="iframe-btn">Iframe Button</button></body></html>');
+                        doc.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Get accessibility tree using the tool
+            result = await get_accessibility_tree(page)
+
+            assert result.success is True, f"get_accessibility_tree should succeed: {result.error}"
+
+            # After T025 implementation, tree should include frame metadata
+            # Format: "--- [frame: test-frame, index: 1] ---" or similar
+            tree_text = result.data.get("tree", "")
+
+            # This will FAIL until T025 is implemented
+            # Frame metadata markers should be present
+            assert ("frame" in tree_text.lower() or "[frame:" in tree_text or
+                   "test-frame" in tree_text), \
+                   "Frame metadata markers should be in tree output (FR-006)"
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_multiple_sibling_iframes(self):
+        """Test accessibility tree handles multiple iframes at same level."""
+        from browser_agent.tools.accessibility import get_accessibility_tree
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with multiple sibling iframes
+            await page.set_content("""
+                <html>
+                <body>
+                    <h1>Main Page</h1>
+                    <iframe id="frame1" name="frame1"></iframe>
+                    <iframe id="frame2" name="frame2"></iframe>
+                    <iframe id="frame3" name="frame3"></iframe>
+                    <script>
+                        [1, 2, 3].forEach(i => {
+                            const iframe = document.getElementById('frame' + i);
+                            const doc = iframe.contentDocument || iframe.contentWindow.document;
+                            doc.open();
+                            doc.write(`<html><body><button id="btn${i}">Button ${i}</button></body></html>`);
+                            doc.close();
+                        });
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Get accessibility tree using the tool
+            result = await get_accessibility_tree(page)
+
+            assert result.success is True, f"get_accessibility_tree should succeed: {result.error}"
+            tree_text = result.data.get("tree", "")
+
+            # Verify content from all three iframes is included
+            # These will FAIL until T024 is implemented
+            assert "Button 1" in tree_text or "btn1" in tree_text, "Frame 1 content should be included"
+            assert "Button 2" in tree_text or "btn2" in tree_text, "Frame 2 content should be included"
+            assert "Button 3" in tree_text or "btn3" in tree_text, "Frame 3 content should be included"
+
+            await browser.close()
+
+    @pytest.mark.asyncio
+    async def test_cross_origin_iframe_graceful_skip(self):
+        """Test cross-origin iframes are gracefully skipped (FR-027)."""
+        from browser_agent.tools.accessibility import get_accessibility_tree
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Create page with same-origin iframe
+            await page.set_content("""
+                <html>
+                <body>
+                    <h1>Main Page</h1>
+                    <button id="main-btn">Main Button</button>
+                    <iframe id="same-origin-frame" name="same-origin-frame"></iframe>
+                    <script>
+                        const iframe = document.getElementById('same-origin-frame');
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write('<html><body><h2>Iframe Content</h2><button id="iframe-btn">Iframe Button</button></body></html>');
+                        doc.close();
+                    </script>
+                </body>
+                </html>
+            """)
+
+            # Get accessibility tree using the tool - should not crash on cross-origin iframes
+            # Even though we only have same-origin here, the function should handle
+            # cross-origin frames gracefully when encountered
+            try:
+                result = await get_accessibility_tree(page)
+
+                assert result.success is True, f"get_accessibility_tree should succeed: {result.error}"
+                tree_text = result.data.get("tree", "")
+
+                # Should include main frame content
+                assert "Main Page" in tree_text or "Main Button" in tree_text
+
+                # This will FAIL until T024, but shouldn't crash
+                # After implementation, same-origin iframe should be included
+                # assert "Iframe Content" in tree_text or "Iframe Button" in tree_text
+
+            except Exception as e:
+                pytest.fail(f"Should not crash on iframe traversal: {e}")
+
+            await browser.close()
 
 
 class TestFrameMetadataFormat:

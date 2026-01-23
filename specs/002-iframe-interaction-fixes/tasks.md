@@ -143,7 +143,7 @@
 
 - [x] T035 [P] Update CLAUDE.md with new iframe tools documentation
 - [x] T036 [P] Add iframe configuration to .env.example (IFRAME_TIMEOUT_MS, IFRAME_WAIT_MS)
-- [ ] T037 Validate all quickstart.md test scenarios pass
+- [x] T037 Validate all quickstart.md test scenarios pass
 - [ ] T038 Run full test suite and verify >80% iframe coverage (SC-007)
 - [ ] T039 Verify all existing tests still pass (SC-006 backward compatibility)
 

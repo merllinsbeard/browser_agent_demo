@@ -360,7 +360,14 @@ class TestClickInterception:
             # Verify frame_context indicates iframe
             frame_ctx = click_result.data.get("frame_context", {})
             assert frame_ctx.get("name") == "button-frame", \
-                "Click should have happened in button-frame iframe"
+                f"Click should have happened in button-frame iframe, got {frame_ctx}"
+
+            # Wait for the JavaScript message to propagate and update the status
+            # The click event is async, so we need to wait for the status to change
+            await page.wait_for_function(
+                "document.getElementById('status').textContent === 'Action performed!'",
+                timeout=5000
+            )
 
             # Verify the button was actually clicked
             status_text = await page.locator("#status").text_content()

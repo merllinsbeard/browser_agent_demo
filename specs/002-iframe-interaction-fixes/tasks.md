@@ -100,7 +100,7 @@
 
 ### Tests for User Story 3
 
-- [ ] T022 [P] [US3] Unit test for recursive frame traversal in tests/unit/test_frame_tools.py::test_recursive_accessibility_tree
+- [x] T022 [P] [US3] Unit test for recursive frame traversal in tests/unit/test_frame_tools.py::test_recursive_accessibility_tree
 - [ ] T023 [P] [US3] Unit test for frame metadata markers in tests/unit/test_frame_tools.py::test_frame_metadata_format
 
 ### Implementation for User Story 3

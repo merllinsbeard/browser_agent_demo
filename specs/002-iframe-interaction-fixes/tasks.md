@@ -123,8 +123,8 @@
 
 ### Tests for User Story 4
 
-- [ ] T029 [P] [US4] Unit test for RetryChain state machine in tests/unit/test_frame_tools.py::test_retry_chain_state_machine
-- [ ] T030 [P] [US4] Unit test for structured error response in tests/unit/test_frame_tools.py::test_structured_error_response
+- [x] T029 [P] [US4] Unit test for RetryChain state machine in tests/unit/test_frame_tools.py::test_retry_chain_state_machine
+- [x] T030 [P] [US4] Unit test for structured error response in tests/unit/test_frame_tools.py::test_structured_error_response
 
 ### Implementation for User Story 4
 

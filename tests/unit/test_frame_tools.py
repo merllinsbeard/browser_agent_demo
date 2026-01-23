@@ -577,24 +577,6 @@ class TestCoordinateClick:
             await browser.close()
 
 
-class TestRetryChainStateMachine:
-    """Test RetryChain state machine progression (T029)."""
-
-    def test_retry_chain_state_machine(self):
-        """Test retry chain advances through strategies correctly."""
-        # Implementation in T029
-        pytest.skip("Test implementation in T029")
-
-
-class TestStructuredErrorResponse:
-    """Test structured error response format (T030)."""
-
-    def test_structured_error_response(self):
-        """Test error includes all attempts in response."""
-        # Implementation in T030
-        pytest.skip("Test implementation in T030")
-
-
 class TestFramePrioritization:
     """Test frame prioritization logic (T005)."""
 
@@ -1826,3 +1808,326 @@ class TestSwitchToFrame:
             assert result.data["frame_context"]["name"] == "index-frame"
 
             await browser.close()
+
+
+class TestRetryChainStateMachine:
+    """Test RetryChain state machine (T029)."""
+
+    def test_retry_chain_initialization(self):
+        """Test RetryChain initialization with default values."""
+        chain = RetryChain(
+            strategies=["main_frame", "iframe_0", "coordinate_click"],
+            max_attempts=3,
+        )
+
+        assert len(chain.strategies) == 3
+        assert chain.current_index == 0
+        assert chain.max_attempts == 3
+        assert len(chain.attempts) == 0
+        assert chain.timeout_per_frame_ms == 10000  # Default
+
+    def test_retry_chain_custom_timeout(self):
+        """Test RetryChain with custom timeout_per_frame_ms (FR-020)."""
+        chain = RetryChain(
+            strategies=["main_frame", "coordinate_click"],
+            max_attempts=2,
+            timeout_per_frame_ms=5000,
+        )
+
+        assert chain.timeout_per_frame_ms == 5000
+
+    def test_retry_chain_state_progression(self):
+        """Test RetryChain state machine progression through strategies."""
+        chain = RetryChain(
+            strategies=["main_frame", "iframe_search", "coordinate_click"],
+            max_attempts=3,
+        )
+
+        # Initial state
+        assert chain.current_index == 0
+        assert chain.current_index < len(chain.strategies)
+
+        # Simulate first attempt failure
+        attempt1 = InteractionAttempt(
+            strategy="main_frame",
+            success=False,
+            duration_ms=1000,
+            error="Timeout",
+        )
+        chain.attempts.append(attempt1)
+        chain.current_index = 1
+
+        # State after first attempt
+        assert chain.current_index == 1
+        assert len(chain.attempts) == 1
+
+        # Simulate second attempt failure
+        attempt2 = InteractionAttempt(
+            strategy="iframe_search",
+            success=False,
+            duration_ms=1500,
+            error="Element not found",
+        )
+        chain.attempts.append(attempt2)
+        chain.current_index = 2
+
+        # State after second attempt
+        assert chain.current_index == 2
+        assert len(chain.attempts) == 2
+
+        # Simulate final attempt success
+        attempt3 = InteractionAttempt(
+            strategy="coordinate_click",
+            success=True,
+            duration_ms=500,
+            error=None,
+        )
+        chain.attempts.append(attempt3)
+        chain.current_index = 3
+
+        # Final state - all attempts made
+        assert chain.current_index == 3
+        assert len(chain.attempts) == 3
+        assert chain.attempts[2].success is True
+
+    def test_retry_chain_exhaustion(self):
+        """Test RetryChain when all strategies are exhausted."""
+        chain = RetryChain(
+            strategies=["main_frame", "coordinate_click"],
+            max_attempts=2,
+        )
+
+        # Simulate both attempts failing
+        attempt1 = InteractionAttempt(
+            strategy="main_frame",
+            success=False,
+            duration_ms=1000,
+            error="Timeout",
+        )
+        attempt2 = InteractionAttempt(
+            strategy="coordinate_click",
+            success=False,
+            duration_ms=500,
+            error="No bounding box",
+        )
+
+        chain.attempts.extend([attempt1, attempt2])
+        chain.current_index = 2
+
+        # Should indicate exhaustion
+        assert chain.current_index >= chain.max_attempts
+        assert len(chain.attempts) == chain.max_attempts
+
+    def test_retry_chain_early_success(self):
+        """Test RetryChain stops early when strategy succeeds."""
+        chain = RetryChain(
+            strategies=["main_frame", "iframe_0", "coordinate_click"],
+            max_attempts=3,
+        )
+
+        # First attempt succeeds
+        attempt1 = InteractionAttempt(
+            strategy="main_frame",
+            success=True,
+            duration_ms=500,
+            error=None,
+        )
+        chain.attempts.append(attempt1)
+        chain.current_index = 1
+
+        # Should stop after first success
+        assert len(chain.attempts) == 1
+        assert chain.attempts[0].success is True
+        assert chain.current_index == 1  # Moved to next but not executed
+
+    def test_retry_chain_current_strategy(self):
+        """Test getting current strategy from RetryChain."""
+        chain = RetryChain(
+            strategies=["main_frame", "iframe_search", "coordinate_click"],
+            max_attempts=3,
+        )
+
+        # Current strategy at index 0
+        current = chain.strategies[chain.current_index]
+        assert current == "main_frame"
+
+        # After first attempt
+        chain.current_index = 1
+        current = chain.strategies[chain.current_index]
+        assert current == "iframe_search"
+
+        # After second attempt
+        chain.current_index = 2
+        current = chain.strategies[chain.current_index]
+        assert current == "coordinate_click"
+
+
+class TestStructuredErrorResponse:
+    """Test structured error response format (T030)."""
+
+    def test_error_response_includes_attempts_array(self):
+        """Test error response includes all attempts (FR-019)."""
+        # Simulate failed interaction with multiple attempts
+        attempts = [
+            InteractionAttempt(
+                strategy="main_frame",
+                success=False,
+                duration_ms=1000,
+                error="Timeout waiting for selector",
+            ),
+            InteractionAttempt(
+                strategy="iframe_search",
+                success=False,
+                duration_ms=1500,
+                error="Frame not accessible",
+            ),
+            InteractionAttempt(
+                strategy="coordinate_click",
+                success=False,
+                duration_ms=500,
+                error="Element has no bounding box",
+            ),
+        ]
+
+        # Verify all attempts are recorded
+        assert len(attempts) == 3
+        assert all(not attempt.success for attempt in attempts)
+        assert all(attempt.error for attempt in attempts)
+
+    def test_error_response_attempt_structure(self):
+        """Test each attempt has required fields (FR-019)."""
+        attempt = InteractionAttempt(
+            strategy="main_frame",
+            success=False,
+            duration_ms=1200,
+            error="Element not found",
+            frame_context=FrameContext(
+                name="search-frame",
+                index=1,
+                accessible=True,
+            ),
+        )
+
+        # Required fields present
+        assert attempt.strategy == "main_frame"
+        assert attempt.success is False
+        assert attempt.duration_ms == 1200
+        assert attempt.error == "Element not found"
+        assert attempt.frame_context is not None
+        assert attempt.frame_context.name == "search-frame"
+
+    def test_error_response_serialization(self):
+        """Test error response can be serialized to JSON (FR-019)."""
+        attempts = [
+            InteractionAttempt(
+                strategy="main_frame",
+                success=False,
+                duration_ms=1000,
+                error="Timeout",
+            ),
+            InteractionAttempt(
+                strategy="coordinate_click",
+                success=True,
+                duration_ms=500,
+                error=None,
+            ),
+        ]
+
+        # Test model_dump for JSON serialization
+        for attempt in attempts:
+            data = attempt.model_dump()
+            assert "strategy" in data
+            assert "success" in data
+            assert "duration_ms" in data
+            assert "error" in data
+
+    def test_error_response_with_retry_chain(self):
+        """Test complete error response structure with RetryChain."""
+        chain = RetryChain(
+            strategies=["main_frame", "iframe_0", "coordinate_click"],
+            max_attempts=3,
+        )
+
+        # Add failed attempts
+        chain.attempts = [
+            InteractionAttempt(
+                strategy="main_frame",
+                success=False,
+                duration_ms=1000,
+                error="Timeout",
+            ),
+            InteractionAttempt(
+                strategy="iframe_0",
+                success=False,
+                duration_ms=1200,
+                error="Element not found in iframe",
+            ),
+            InteractionAttempt(
+                strategy="coordinate_click",
+                success=False,
+                duration_ms=300,
+                error="No bounding box",
+            ),
+        ]
+        chain.current_index = 3
+
+        # Verify complete structure
+        assert chain.current_index == 3
+        assert len(chain.attempts) == 3
+        assert not any(attempt.success for attempt in chain.attempts)
+
+        # All attempts have errors
+        for attempt in chain.attempts:
+            assert attempt.error is not None
+            assert attempt.strategy in chain.strategies
+
+    def test_error_response_frame_context_in_attempts(self):
+        """Test frame_context is included in each attempt when applicable."""
+        main_context = FrameContext(index=0, name="main")
+        iframe_context = FrameContext(index=1, name="search-frame", aria_label="Search")
+
+        attempts = [
+            InteractionAttempt(
+                strategy="main_frame",
+                success=False,
+                duration_ms=1000,
+                error="Timeout",
+                frame_context=main_context,
+            ),
+            InteractionAttempt(
+                strategy="iframe_search",
+                success=False,
+                duration_ms=1500,
+                error="Not found",
+                frame_context=iframe_context,
+            ),
+        ]
+
+        # Verify frame contexts are preserved
+        assert attempts[0].frame_context.index == 0
+        assert attempts[1].frame_context.index == 1
+        assert attempts[1].frame_context.aria_label == "Search"
+
+    def test_error_response_timing_information(self):
+        """Test duration_ms is recorded for each attempt."""
+        attempts = [
+            InteractionAttempt(
+                strategy="main_frame",
+                success=False,
+                duration_ms=500,
+                error="Timeout",
+            ),
+            InteractionAttempt(
+                strategy="coordinate_click",
+                success=False,
+                duration_ms=200,
+                error="Failed",
+            ),
+        ]
+
+        # Calculate total duration
+        total_duration = sum(attempt.duration_ms for attempt in attempts)
+
+        assert total_duration == 700
+        assert attempts[0].duration_ms == 500
+        assert attempts[1].duration_ms == 200

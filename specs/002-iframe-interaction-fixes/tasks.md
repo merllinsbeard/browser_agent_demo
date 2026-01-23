@@ -141,7 +141,7 @@
 
 **Purpose**: Documentation, validation, and final quality checks
 
-- [ ] T035 [P] Update CLAUDE.md with new iframe tools documentation
+- [x] T035 [P] Update CLAUDE.md with new iframe tools documentation
 - [ ] T036 [P] Add iframe configuration to .env.example (IFRAME_TIMEOUT_MS, IFRAME_WAIT_MS)
 - [ ] T037 Validate all quickstart.md test scenarios pass
 - [ ] T038 Run full test suite and verify >80% iframe coverage (SC-007)

@@ -89,8 +89,8 @@
 
 ### Implementation for User Story 2
 
-- [ ] T029 [P] [US2] Implement planner agent prompt in src/browser_agent/agents/definitions.py with task decomposition logic
-- [ ] T030 [P] [US2] Implement executor agent retry strategies in src/browser_agent/agents/definitions.py (alternative descriptions, frames, coordinate click)
+- [x] T029 [P] [US2] Implement planner agent prompt in src/browser_agent/agents/definitions.py with task decomposition logic
+- [x] T030 [P] [US2] Implement executor agent retry strategies in src/browser_agent/agents/definitions.py (alternative descriptions, frames, coordinate click)
 - [ ] T031 [US2] Implement Task tool orchestration flow in src/browser_agent/agents/orchestrator.py
 - [ ] T032 [P] [US2] Add multi-turn conversation support in src/browser_agent/main.py (ClaudeSDKClient session)
 - [ ] T033 [US2] Implement subagent result aggregation and reporting in src/browser_agent/tui/display.py

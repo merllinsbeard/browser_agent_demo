@@ -43,11 +43,11 @@
 - [x] T006 [P] Implement adapt_tool_for_sdk() function to wrap existing @tool tools
 - [x] T007 [P] Implement create_browser_server() to create MCP server with 23 adapted tools
 - [x] T008 [P] Implement tool_result_to_sdk_format() converter in src/browser_agent/sdk_adapter.py
-- [ ] T009 Update src/browser_agent/agents/definitions.py with AgentDefinition model tiers (sonnet/haiku)
-- [ ] T010 [P] Implement planner agent definition with Task tool access in src/browser_agent/agents/definitions.py
-- [ ] T011 [P] Implement dom_analyzer agent definition in src/browser_agent/agents/definitions.py
-- [ ] T012 [P] Implement executor agent definition in src/browser_agent/agents/definitions.py
-- [ ] T013 [P] Implement validator agent definition in src/browser_agent/agents/definitions.py
+- [x] T009 Update src/browser_agent/agents/definitions.py with AgentDefinition model tiers (sonnet/haiku)
+- [x] T010 [P] Implement planner agent definition with Task tool access in src/browser_agent/agents/definitions.py
+- [x] T011 [P] Implement dom_analyzer agent definition in src/browser_agent/agents/definitions.py
+- [x] T012 [P] Implement executor agent definition in src/browser_agent/agents/definitions.py
+- [x] T013 [P] Implement validator agent definition in src/browser_agent/agents/definitions.py
 - [ ] T014 Implement ClaudeSDKClient wrapper in src/browser_agent/agents/orchestrator.py
 - [ ] T015 Remove src/browser_agent/agents/planner.py (ReActPlanner class - ~150 lines)
 - [ ] T016 [P] Adapt src/browser_agent/llm/provider.py for SDK tool calling format

@@ -48,12 +48,12 @@
 - [x] T011 [P] Implement dom_analyzer agent definition in src/browser_agent/agents/definitions.py
 - [x] T012 [P] Implement executor agent definition in src/browser_agent/agents/definitions.py
 - [x] T013 [P] Implement validator agent definition in src/browser_agent/agents/definitions.py
-- [ ] T014 Implement ClaudeSDKClient wrapper in src/browser_agent/agents/orchestrator.py
-- [ ] T015 Remove src/browser_agent/agents/planner.py (ReActPlanner class - ~150 lines)
-- [ ] T016 [P] Adapt src/browser_agent/llm/provider.py for SDK tool calling format
-- [ ] T017 [P] Adapt src/browser_agent/llm/anthropic_provider.py for SDK native implementation
-- [ ] T018 [P] Update src/browser_agent/llm/factory.py to return SDK-compatible provider
-- [ ] T019 Create main CLI entry point in src/browser_agent/main.py (~100 lines)
+- [x] T014 Implement ClaudeSDKClient wrapper in src/browser_agent/agents/orchestrator.py
+- [x] T015 Remove src/browser_agent/agents/planner.py (ReActPlanner class - ~150 lines)
+- [x] T016 [P] Adapt src/browser_agent/llm/provider.py for SDK tool calling format (N/A - SDK handles LLM directly)
+- [x] T017 [P] Adapt src/browser_agent/llm/anthropic_provider.py for SDK native implementation (N/A - SDK handles LLM directly)
+- [x] T018 [P] Update src/browser_agent/llm/factory.py to return SDK-compatible provider (N/A - SDK handles LLM directly)
+- [x] T019 Create main CLI entry point in src/browser_agent/main.py (~100 lines)
 
 **Checkpoint**: SDK integration foundation ready - user story implementation can now begin in parallel
 

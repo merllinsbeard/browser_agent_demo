@@ -525,7 +525,26 @@ frames = await _wait_for_dynamic_iframes(page, expected_count=3)
 ```bash
 # LLM Provider
 ANTHROPIC_API_KEY=sk-ant-...
-LLM_PROVIDER=anthropic              # or "openai_compatible"
+
+### OpenRouter Configuration (Alternative)
+
+To use OpenRouter instead of direct Anthropic API:
+
+```bash
+# In .env
+ANTHROPIC_BASE_URL=https://openrouter.ai/api
+ANTHROPIC_AUTH_TOKEN=sk-or-v1-your-openrouter-key
+ANTHROPIC_API_KEY=  # Leave empty
+```
+
+OpenRouter provides Anthropic-compatible API endpoint for Claude Agent SDK.
+
+**Model Selection**: OpenRouter maps model aliases automatically:
+- `sonnet` → `anthropic/claude-3.5-sonnet` (or latest)
+- `opus` → `anthropic/claude-3-opus` (or latest)
+- `haiku` → `anthropic/claude-3-haiku` (or latest)
+
+You can also specify full model names like `google/gemini-2-flash` or `meta-llama/llama-3.1-70b`.
 
 # Model Selection
 MODEL_SONNET=claude-sonnet-4-20250514      # High-quality reasoning

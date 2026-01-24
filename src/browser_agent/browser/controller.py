@@ -19,8 +19,8 @@ from playwright.async_api import (
 )
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (override shell env with .env values)
+load_dotenv(override=True)
 
 
 BrowserType = Literal["chromium", "firefox", "webkit"]

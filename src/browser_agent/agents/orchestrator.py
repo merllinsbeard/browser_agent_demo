@@ -232,6 +232,21 @@ Always:
         await self.initialize()
         return ConversationSession(self._options)
 
+    async def close(self) -> None:
+        """Close the orchestrator and release resources."""
+        # Close browser if we own it
+        if self._owns_browser and self._browser:
+            await self._browser.close()
+
+    async def __aenter__(self) -> "AgentOrchestrator":
+        """Async context manager entry."""
+        await self.initialize()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Async context manager exit."""
+        await self.close()
+
 
 class ConversationSession:
     """
@@ -286,25 +301,6 @@ class ConversationSession:
         """Interrupt the current operation."""
         if self._client:
             await self._client.interrupt()
-
-    async def close(self) -> None:
-        """Close the orchestrator and release resources."""
-        if self._client:
-            await self._client.close()
-            self._client = None
-
-        # Close browser if we own it
-        if self._owns_browser and self._browser:
-            await self._browser.close()
-
-    async def __aenter__(self):
-        """Async context manager entry."""
-        await self.initialize()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        await self.close()
 
 
 def create_orchestrator(

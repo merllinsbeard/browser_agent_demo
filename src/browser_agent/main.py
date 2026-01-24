@@ -19,8 +19,8 @@ from dotenv import load_dotenv
 
 from browser_agent.config import configure_logging
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (override shell env with .env values)
+load_dotenv(override=True)
 
 # SDK imports
 try:

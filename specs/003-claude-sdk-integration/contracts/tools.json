@@ -1,0 +1,468 @@
+{
+  "tools": [
+    {
+      "name": "navigate",
+      "description": "Navigate to a URL. Opens the specified web page in the browser.",
+      "category": "navigation",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The URL to navigate to"
+          }
+        },
+        "required": ["url"]
+      },
+      "security_check": false
+    },
+    {
+      "name": "go_back",
+      "description": "Navigate back to the previous page in browser history.",
+      "category": "navigation",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "security_check": false
+    },
+    {
+      "name": "go_forward",
+      "description": "Navigate forward in browser history.",
+      "category": "navigation",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "security_check": false
+    },
+    {
+      "name": "reload",
+      "description": "Reload the current page.",
+      "category": "navigation",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "security_check": false
+    },
+    {
+      "name": "click",
+      "description": "Click on an element described in natural language. Automatically searches across all frames (main page and iframes). Uses accessibility tree and multiple strategies to find the element.",
+      "category": "interactions",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "element_description": {
+            "type": "string",
+            "description": "Natural language description of the element to click"
+          },
+          "role": {
+            "type": "string",
+            "description": "Optional ARIA role to match (e.g., 'button', 'link')"
+          },
+          "double_click": {
+            "type": "boolean",
+            "description": "Whether to double-click instead of single-click"
+          },
+          "right_click": {
+            "type": "boolean",
+            "description": "Whether to right-click instead of left-click"
+          },
+          "frame": {
+            "type": "string",
+            "description": "Optional frame selector (name, aria-label, title, or index)"
+          },
+          "timeout_per_frame_ms": {
+            "type": "integer",
+            "description": "Timeout per frame attempt in milliseconds (default: 10000)"
+          }
+        },
+        "required": ["element_description"]
+      },
+      "security_check": true
+    },
+    {
+      "name": "type_text",
+      "description": "Type text into an input field described in natural language. Automatically searches across all frames (main page and iframes). Optionally clears the field first.",
+      "category": "interactions",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The text to type into the field"
+          },
+          "element_description": {
+            "type": "string",
+            "description": "Natural language description of the input field"
+          },
+          "clear_first": {
+            "type": "boolean",
+            "description": "Whether to clear the field before typing (default: true)"
+          },
+          "press_enter": {
+            "type": "boolean",
+            "description": "Whether to press Enter after typing (default: false)"
+          },
+          "frame": {
+            "type": "string",
+            "description": "Optional frame selector (name, aria-label, title, or index)"
+          },
+          "timeout_per_frame_ms": {
+            "type": "integer",
+            "description": "Timeout per frame attempt in milliseconds (default: 10000)"
+          }
+        },
+        "required": ["text", "element_description"]
+      },
+      "security_check": true
+    },
+    {
+      "name": "scroll",
+      "description": "Scroll the page or a specific element. Can scroll by direction, to an element, or to specific coordinates.",
+      "category": "interactions",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "direction": {
+            "type": "string",
+            "enum": ["up", "down", "left", "right"],
+            "description": "Direction to scroll"
+          },
+          "amount": {
+            "type": "integer",
+            "description": "Pixels to scroll (default: 500)"
+          },
+          "element_description": {
+            "type": "string",
+            "description": "Element description to scroll into view"
+          },
+          "x": {
+            "type": "integer",
+            "description": "X coordinate to scroll to"
+          },
+          "y": {
+            "type": "integer",
+            "description": "Y coordinate to scroll to"
+          }
+        },
+        "required": []
+      },
+      "security_check": false
+    },
+    {
+      "name": "hover",
+      "description": "Hover over an element to reveal tooltips or dropdown menus.",
+      "category": "interactions",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "element_description": {
+            "type": "string",
+            "description": "Natural language description of the element to hover over"
+          },
+          "frame": {
+            "type": "string",
+            "description": "Optional frame selector"
+          }
+        },
+        "required": ["element_description"]
+      },
+      "security_check": false
+    },
+    {
+      "name": "select_option",
+      "description": "Select an option from a dropdown or select element.",
+      "category": "interactions",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "element_description": {
+            "type": "string",
+            "description": "Natural language description of the select element"
+          },
+          "option": {
+            "type": "string",
+            "description": "The option to select (by text or value)"
+          },
+          "frame": {
+            "type": "string",
+            "description": "Optional frame selector"
+          }
+        },
+        "required": ["element_description", "option"]
+      },
+      "security_check": false
+    },
+    {
+      "name": "wait_for_load",
+      "description": "Wait for the page to reach a specific load state. Use after navigation or actions that trigger page changes.",
+      "category": "wait",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": ["load", "domcontentloaded", "networkidle"],
+            "description": "The load state to wait for"
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "description": "Maximum time to wait in milliseconds (default: 30000)"
+          }
+        },
+        "required": []
+      },
+      "security_check": false
+    },
+    {
+      "name": "wait_for_selector",
+      "description": "Wait for an element matching the selector to appear in the page. Useful for waiting on dynamic content.",
+      "category": "wait",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "selector": {
+            "type": "string",
+            "description": "CSS selector to wait for"
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "description": "Maximum time to wait in milliseconds (default: 30000)"
+          },
+          "state": {
+            "type": "string",
+            "enum": ["attached", "detached", "visible", "hidden"],
+            "description": "Element state to wait for (default: 'visible')"
+          }
+        },
+        "required": ["selector"]
+      },
+      "security_check": false
+    },
+    {
+      "name": "wait_for_text",
+      "description": "Wait for specific text to appear on the page. Searches the entire page by default.",
+      "category": "wait",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The text to wait for"
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "description": "Maximum time to wait in milliseconds (default: 30000)"
+          },
+          "frame": {
+            "type": "string",
+            "description": "Optional frame to search in"
+          }
+        },
+        "required": ["text"]
+      },
+      "security_check": false
+    },
+    {
+      "name": "wait_for_url",
+      "description": "Wait for the page URL to match a pattern. Useful after navigation or form submissions.",
+      "category": "wait",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "URL pattern to match (regex or substring)"
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "description": "Maximum time to wait in milliseconds (default: 30000)"
+          }
+        },
+        "required": ["pattern"]
+      },
+      "security_check": false
+    },
+    {
+      "name": "sleep",
+      "description": "Pause execution for a specified duration. Use sparingly - prefer wait_for_* tools when possible.",
+      "category": "wait",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "duration_ms": {
+            "type": "integer",
+            "description": "Duration to sleep in milliseconds"
+          }
+        },
+        "required": ["duration_ms"]
+      },
+      "security_check": false
+    },
+    {
+      "name": "get_accessibility_tree",
+      "description": "Get the accessibility tree of the current page. Returns a hierarchical structure of all accessible elements, including iframe contents recursively (up to depth 3).",
+      "category": "accessibility",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "max_depth": {
+            "type": "integer",
+            "description": "Maximum depth for recursive iframe traversal (default: 3)"
+          }
+        },
+        "required": []
+      },
+      "security_check": false
+    },
+    {
+      "name": "find_interactive_elements",
+      "description": "Find all interactive elements on the page (buttons, links, inputs, etc.), including iframe contents. Returns a list with their roles, names, and states.",
+      "category": "accessibility",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "security_check": false
+    },
+    {
+      "name": "get_page_text",
+      "description": "Extract all visible text content from the page. Useful for reading page content and understanding context.",
+      "category": "accessibility",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "frame": {
+            "type": "string",
+            "description": "Optional frame to get text from"
+          },
+          "max_length": {
+            "type": "integer",
+            "description": "Maximum characters to return (default: 10000)"
+          }
+        },
+        "required": []
+      },
+      "security_check": false
+    },
+    {
+      "name": "list_frames",
+      "description": "List all frames on the page with their attributes (name, src, aria-label, title, accessibility status). Use this to discover iframe contexts before targeting elements.",
+      "category": "frames",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "include_inaccessible": {
+            "type": "boolean",
+            "description": "Whether to include cross-origin frames (default: true)"
+          }
+        },
+        "required": []
+      },
+      "security_check": false
+    },
+    {
+      "name": "get_frame_content",
+      "description": "Extract content from a specific frame (main frame or iframe). Use this to explicitly get text or HTML content from a frame by its name, aria-label, title, or index.",
+      "category": "frames",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "frame_selector": {
+            "type": "string",
+            "description": "Frame selector (name, aria-label, title, or index)"
+          },
+          "content_type": {
+            "type": "string",
+            "enum": ["text", "html"],
+            "description": "Type of content to extract (default: 'text')"
+          },
+          "max_length": {
+            "type": "integer",
+            "description": "Maximum characters to return (default: 10000)"
+          }
+        },
+        "required": ["frame_selector"]
+      },
+      "security_check": false
+    },
+    {
+      "name": "switch_to_frame",
+      "description": "Switch to a specific frame context for explicit targeting. Returns frame information including frame_selector for use with click/type_text frame parameter.",
+      "category": "frames",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "frame_selector": {
+            "type": "string",
+            "description": "Frame selector (name, aria-label, title, or index)"
+          }
+        },
+        "required": ["frame_selector"]
+      },
+      "security_check": false
+    },
+    {
+      "name": "screenshot",
+      "description": "Take a screenshot of the current page or a specific element. Returns base64-encoded image data. Use this when you need visual information that the accessibility tree doesn't provide.",
+      "category": "screenshot",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "element_description": {
+            "type": "string",
+            "description": "Optional element to screenshot"
+          },
+          "full_page": {
+            "type": "boolean",
+            "description": "Whether to capture full scrolling page (default: false)"
+          }
+        },
+        "required": []
+      },
+      "security_check": false
+    },
+    {
+      "name": "save_screenshot",
+      "description": "Take a screenshot and save it to a file. Useful for debugging or creating evidence of actions taken.",
+      "category": "screenshot",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Path where screenshot will be saved"
+          },
+          "element_description": {
+            "type": "string",
+            "description": "Optional element to screenshot"
+          },
+          "full_page": {
+            "type": "boolean",
+            "description": "Whether to capture full scrolling page (default: false)"
+          }
+        },
+        "required": ["file_path"]
+      },
+      "security_check": false
+    },
+    {
+      "name": "get_viewport_info",
+      "description": "Get information about the current viewport size and scroll position.",
+      "category": "screenshot",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "security_check": false
+    }
+  ],
+  "total_count": 23
+}

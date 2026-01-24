@@ -182,6 +182,66 @@ def print_navigation(
     console.console.print(panel)
 
 
+def print_subagent_delegation(
+    subagent_name: str,
+    task_description: str,
+    *,
+    model: Optional[str] = None,
+    console: Optional[AgentConsole] = None,
+) -> None:
+    """
+    Print a subagent delegation action block.
+
+    Displays when the orchestrator delegates a task to a subagent
+    via the Task tool (e.g., planner, executor, dom_analyzer, validator).
+
+    Args:
+        subagent_name: Name of the subagent being delegated to
+        task_description: Description of the task being delegated
+        model: Model tier being used (sonnet/haiku/opus)
+        console: Console to use (defaults to global console)
+    """
+    console = console or get_console()
+
+    # Agent-specific icons and colors
+    agent_icons = {
+        "planner": "📋",
+        "dom_analyzer": "🔍",
+        "executor": "⚡",
+        "validator": "✅",
+    }
+    icon = agent_icons.get(subagent_name, "🤖")
+
+    content = Text()
+    content.append(f"{icon} ", style="bold")
+    content.append("Delegating to ", style="dim")
+    content.append(subagent_name, style="bold magenta")
+    if model:
+        content.append(f" ({model})", style="dim italic")
+    content.append("\n\n")
+
+    # Task description (truncate if long)
+    task_display = task_description
+    if len(task_display) > 200:
+        task_display = task_display[:197] + "..."
+    content.append("Task: ", style="dim")
+    content.append(f'"{task_display}"')
+
+    timestamp = console._get_timestamp()
+    full_title = "[SUBAGENT]"
+    if timestamp:
+        full_title = f"{timestamp} {full_title}"
+
+    panel = Panel(
+        content,
+        title=full_title,
+        title_align="left",
+        border_style="magenta",
+        padding=(0, 1),
+    )
+    console.console.print(panel)
+
+
 def print_interaction(
     element_description: str,
     interaction_type: str,

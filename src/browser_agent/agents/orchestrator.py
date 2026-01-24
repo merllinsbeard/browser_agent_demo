@@ -212,6 +212,81 @@ Always:
             async for message in client.receive_response():
                 yield message
 
+    async def create_session(self) -> "ConversationSession":
+        """
+        Create a persistent conversation session for multi-turn interactions.
+
+        The session maintains context between queries, allowing follow-up
+        questions that reference previous interactions.
+
+        Returns:
+            ConversationSession instance
+
+        Example:
+            >>> async with orchestrator.create_session() as session:
+            ...     async for msg in session.query("Navigate to example.com"):
+            ...         print(msg)
+            ...     async for msg in session.query("Click the first link"):
+            ...         print(msg)  # Knows we're on example.com
+        """
+        await self.initialize()
+        return ConversationSession(self._options)
+
+
+class ConversationSession:
+    """
+    Persistent conversation session for multi-turn browser automation.
+
+    Maintains context between queries, allowing follow-up commands
+    that reference previous interactions and browser state.
+    """
+
+    def __init__(self, options: ClaudeAgentOptions):
+        """
+        Initialize conversation session.
+
+        Args:
+            options: ClaudeAgentOptions with browser MCP server
+        """
+        self._options = options
+        self._client: Optional[ClaudeSDKClient] = None
+
+    async def __aenter__(self) -> "ConversationSession":
+        """Start the conversation session."""
+        self._client = ClaudeSDKClient(options=self._options)
+        await self._client.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """End the conversation session."""
+        if self._client:
+            await self._client.__aexit__(exc_type, exc_val, exc_tb)
+            self._client = None
+
+    async def query(self, prompt: str):
+        """
+        Send a query and stream responses.
+
+        Context from previous queries in this session is preserved.
+
+        Args:
+            prompt: Natural language task or follow-up question
+
+        Yields:
+            SDK messages as they arrive
+        """
+        if not self._client:
+            raise RuntimeError("Session not started. Use 'async with' context manager.")
+
+        await self._client.query(prompt)
+        async for message in self._client.receive_response():
+            yield message
+
+    async def interrupt(self):
+        """Interrupt the current operation."""
+        if self._client:
+            await self._client.interrupt()
+
     async def close(self) -> None:
         """Close the orchestrator and release resources."""
         if self._client:

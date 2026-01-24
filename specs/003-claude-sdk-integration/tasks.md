@@ -91,9 +91,9 @@
 
 - [x] T029 [P] [US2] Implement planner agent prompt in src/browser_agent/agents/definitions.py with task decomposition logic
 - [x] T030 [P] [US2] Implement executor agent retry strategies in src/browser_agent/agents/definitions.py (alternative descriptions, frames, coordinate click)
-- [ ] T031 [US2] Implement Task tool orchestration flow in src/browser_agent/agents/orchestrator.py
-- [ ] T032 [P] [US2] Add multi-turn conversation support in src/browser_agent/main.py (ClaudeSDKClient session)
-- [ ] T033 [US2] Implement subagent result aggregation and reporting in src/browser_agent/tui/display.py
+- [x] T031 [US2] Implement Task tool orchestration flow in src/browser_agent/agents/orchestrator.py
+- [x] T032 [P] [US2] Add multi-turn conversation support in src/browser_agent/main.py (ClaudeSDKClient session)
+- [x] T033 [US2] Implement subagent result aggregation and reporting in src/browser_agent/tui/display.py
 - [ ] T034 [US2] Test complex multi-step task with planner decomposition
 - [ ] T035 [US2] Test error recovery when sub-task fails (element not found → retry)
 

@@ -280,6 +280,73 @@ def print_code_result(
     console.console.print(panel)
 
 
+def print_subagent_result(
+    subagent_name: str,
+    result_content: str,
+    *,
+    success: bool = True,
+    model: Optional[str] = None,
+    duration_ms: Optional[int] = None,
+    console: Optional[AgentConsole] = None,
+) -> None:
+    """
+    Print a subagent task result block.
+
+    Displays when a subagent (planner, executor, dom_analyzer, validator)
+    returns its result from a Task tool delegation.
+
+    Args:
+        subagent_name: Name of the subagent that returned the result
+        result_content: The result content from the subagent
+        success: Whether the subagent task succeeded
+        model: Model tier used (sonnet/haiku/opus)
+        duration_ms: Execution time in milliseconds
+        console: Console to use (defaults to global console)
+    """
+    console = console or get_console()
+
+    # Agent-specific icons
+    agent_icons = {
+        "planner": "📋",
+        "dom_analyzer": "🔍",
+        "executor": "⚡",
+        "validator": "✅",
+    }
+    icon = agent_icons.get(subagent_name, "🤖")
+    status_icon = "✓" if success else "✗"
+    status_style = "green" if success else "red"
+
+    content = Text()
+    content.append(f"{icon} ", style="bold")
+    content.append(subagent_name, style="bold magenta")
+    content.append(f" {status_icon}", style=f"bold {status_style}")
+    if model:
+        content.append(f" ({model})", style="dim italic")
+    if duration_ms is not None:
+        content.append(f" [{duration_ms}ms]", style="dim")
+    content.append("\n\n")
+
+    # Result content (truncate if long)
+    result_display = result_content
+    if len(result_display) > 500:
+        result_display = result_display[:497] + "..."
+    content.append(result_display)
+
+    timestamp = console._get_timestamp()
+    full_title = "[SUBAGENT RESULT]"
+    if timestamp:
+        full_title = f"{timestamp} {full_title}"
+
+    panel = Panel(
+        content,
+        title=full_title,
+        title_align="left",
+        border_style="magenta" if success else "red",
+        padding=(0, 1),
+    )
+    console.console.print(panel)
+
+
 def print_completion(
     summary: str,
     *,

@@ -29,7 +29,15 @@ except ImportError:
     sys.exit(1)
 
 from browser_agent.agents.orchestrator import create_orchestrator
-from browser_agent.tui import print_thought, print_tool_call, print_result, print_error, get_console
+from browser_agent.tui import (
+    print_thought,
+    print_tool_call,
+    print_result,
+    print_error,
+    print_subagent_delegation,
+    print_subagent_result,
+    get_console,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -187,7 +195,10 @@ def _display_message(message, verbose: bool) -> None:
                         print(text)
 
             elif isinstance(block, ToolUseBlock):
-                if verbose:
+                # Check if this is a subagent delegation (Task tool)
+                if block.name == "Task":
+                    _display_subagent_delegation(block.input, verbose)
+                elif verbose:
                     print_tool_call(block.name, block.input)
 
     elif isinstance(message, ResultMessage):
@@ -196,6 +207,9 @@ def _display_message(message, verbose: bool) -> None:
             print_result(str(message.result), success=True)
         elif message.subtype == "error":
             print_error(str(message.error_message), error_type="ExecutionError")
+        elif message.subtype == "subagent_result":
+            # Subagent result from Task tool
+            _display_subagent_result_message(message, verbose)
         else:
             # Other result types
             if verbose:
@@ -204,6 +218,134 @@ def _display_message(message, verbose: bool) -> None:
     elif verbose:
         # Unknown message type
         print(f"[dim]{type(message).__name__}: {message}[/dim]")
+
+
+def _display_subagent_delegation(task_input: dict, verbose: bool) -> None:
+    """
+    Display subagent delegation from Task tool call.
+
+    Args:
+        task_input: Task tool input dict with subagent_type, prompt, etc.
+        verbose: Show detailed output
+    """
+    subagent_name = task_input.get("subagent_type", "unknown")
+    task_description = task_input.get("prompt", task_input.get("description", ""))
+    model = task_input.get("model")
+
+    # Always show subagent delegation for visibility
+    print_subagent_delegation(
+        subagent_name=subagent_name,
+        task_description=task_description,
+        model=model,
+    )
+
+
+def _display_subagent_result_message(message, verbose: bool) -> None:
+    """
+    Display result from a subagent Task tool call.
+
+    Args:
+        message: ResultMessage with subagent_result subtype
+        verbose: Show detailed output
+    """
+    # Extract subagent info from result metadata if available
+    result_data = message.result if hasattr(message, 'result') else {}
+    if isinstance(result_data, dict):
+        subagent_name = result_data.get("subagent", "unknown")
+        content = result_data.get("content", str(result_data))
+        success = result_data.get("success", True)
+        model = result_data.get("model")
+        duration_ms = result_data.get("duration_ms")
+    else:
+        subagent_name = "unknown"
+        content = str(result_data)
+        success = True
+        model = None
+        duration_ms = None
+
+    print_subagent_result(
+        subagent_name=subagent_name,
+        result_content=content,
+        success=success,
+        model=model,
+        duration_ms=duration_ms,
+    )
+
+
+async def run_interactive_session(
+    start_url: Optional[str] = None,
+    headless: bool = False,
+    verbose: bool = False,
+    max_turns: int = 15,
+    max_budget: float = 10.0,
+) -> None:
+    """
+    Run an interactive multi-turn conversation session.
+
+    Maintains context between queries, allowing follow-up commands
+    that reference previous interactions.
+
+    Args:
+        start_url: Optional URL to navigate to first
+        headless: Run browser in headless mode
+        verbose: Show detailed output
+        max_turns: Maximum agent iterations per query
+        max_budget: Maximum spend in USD for the session
+    """
+    console = get_console()
+
+    console.print("[bold]Browser Automation Agent[/bold] (Multi-turn Session)")
+    console.print("Enter tasks to automate. Context is preserved between commands.")
+    console.print("Commands: 'quit' to exit, 'new' to start fresh session\n")
+
+    orchestrator = create_orchestrator(
+        headless=headless,
+        max_turns=max_turns,
+        max_budget_usd=max_budget,
+    )
+
+    try:
+        async with orchestrator:
+            # Navigate to start URL if provided
+            if start_url:
+                console.print(f"[dim]Navigating to {start_url}...[/dim]")
+                page = orchestrator._browser.current_page
+                if page:
+                    await page.goto(start_url)
+                    console.print(f"[dim]Ready at {start_url}[/dim]\n")
+
+            # Create persistent conversation session
+            async with await orchestrator.create_session() as session:
+                while True:
+                    try:
+                        task = console.input("[bold green]>[/bold green] ").strip()
+                        if not task:
+                            continue
+                        if task.lower() in ("quit", "exit", "q"):
+                            break
+                        if task.lower() == "new":
+                            console.print("[dim]Starting new session...[/dim]\n")
+                            # Exit current session, will create new one
+                            break
+
+                        console.print()  # Spacing before output
+
+                        async for message in session.query(task):
+                            _display_message(message, verbose)
+
+                        console.print()  # Spacing after output
+
+                    except KeyboardInterrupt:
+                        console.print("\n[yellow]Interrupted. Type 'quit' to exit or continue with a new task.[/yellow]")
+                        continue
+
+    except KeyboardInterrupt:
+        console.print("\n[dim]Goodbye![/dim]")
+    except Exception as e:
+        print_error(str(e), error_type="SessionError")
+        if verbose:
+            import traceback
+            traceback.print_exc()
 
 
 def main():
@@ -218,36 +360,13 @@ def main():
 
     # Interactive mode if no task provided
     if not args.task:
-        console = get_console()
-        console.print("[bold]Browser Automation Agent[/bold]")
-        console.print("Enter a task to automate, or 'quit' to exit.\n")
-
-        while True:
-            try:
-                task = console.input("[bold green]Task>[/bold green] ").strip()
-                if not task:
-                    continue
-                if task.lower() in ("quit", "exit", "q"):
-                    break
-
-                success = asyncio.run(run_task(
-                    task=task,
-                    start_url=args.start_url,
-                    headless=args.headless,
-                    verbose=args.verbose,
-                    max_turns=args.max_turns,
-                    max_budget=args.max_budget,
-                ))
-
-                if not success:
-                    console.print("[yellow]Task failed. Try again or type 'quit' to exit.[/yellow]\n")
-                else:
-                    console.print()
-
-            except KeyboardInterrupt:
-                console.print("\n[dim]Goodbye![/dim]")
-                break
-
+        asyncio.run(run_interactive_session(
+            start_url=args.start_url,
+            headless=args.headless,
+            verbose=args.verbose,
+            max_turns=args.max_turns,
+            max_budget=args.max_budget,
+        ))
         return 0
 
     # Single task mode

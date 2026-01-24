@@ -106,7 +106,7 @@ async def _get_frame_metadata(frame: Frame, frame_index: int, frame_path: list[s
     return metadata
 
 
-async def _extract_dom_structure(frame: Frame, max_depth: int = 10) -> dict[str, Any]:
+async def _extract_dom_structure(frame: Frame, max_depth: int = 10, root_selector: str | None = None) -> dict[str, Any]:
     """
     Extract DOM structure from a frame using query selectors.
 
@@ -116,13 +116,14 @@ async def _extract_dom_structure(frame: Frame, max_depth: int = 10) -> dict[str,
     Args:
         frame: Playwright Frame object
         max_depth: Maximum depth to traverse
+        root_selector: Optional CSS selector to scope extraction (e.g., '#modal')
 
     Returns:
         Dictionary representing the accessibility tree structure
     """
     try:
         # Extract basic page structure
-        structure = await frame.evaluate("""() => {
+        structure = await frame.evaluate("""(rootSelector) => {
             function buildAccessibilityTree(node, depth = 0) {
                 if (depth > 10) return null;
 
@@ -225,13 +226,15 @@ async def _extract_dom_structure(frame: Frame, max_depth: int = 10) -> dict[str,
                 return treeNode;
             }
 
-            // Start from body or document element
-            const root = document.body || document.documentElement;
+            // Start from body or document element, or use root_selector if provided
+            const root = rootSelector
+                ? document.querySelector(rootSelector)
+                : document.body || document.documentElement;
             if (!root) return null;
 
             const tree = buildAccessibilityTree(root);
             return tree;
-        }""")
+        }""", root_selector)
 
         return structure or {}
 
@@ -525,7 +528,7 @@ async def get_accessibility_tree(
                     error=f"Root element not found: {root}",
                 )
             # For root-scoped queries, only extract from main frame
-            tree = await _extract_dom_structure(page.main_frame, max_depth=max_depth)
+            tree = await _extract_dom_structure(page.main_frame, max_depth=max_depth, root_selector=root)
             if not tree:
                 return ToolResult(
                     success=True,
@@ -559,7 +562,7 @@ async def get_accessibility_tree(
             all_nodes = await _traverse_frames_recursively(page)
         else:
             # Only extract from main frame
-            tree = await _extract_dom_structure(page.main_frame, max_depth=max_depth)
+            tree = await _extract_dom_structure(page.main_frame, max_depth=max_depth, root_selector=None)
             all_nodes = [tree] if tree else []
 
         if not all_nodes:

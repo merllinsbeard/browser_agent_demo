@@ -46,14 +46,18 @@ def tool_result_to_sdk_format(result: ToolResult) -> dict[str, Any]:
         }
     else:
         error_msg = result.error or "Unknown error occurred"
-        # Include retry chain info if available
-        if result.metadata and "retry_chain" in result.metadata:
+        # Include retry chain info if available (check both data and metadata)
+        retry_info = None
+        if result.data and isinstance(result.data, dict) and "retry_chain" in result.data:
+            retry_info = result.data["retry_chain"]
+        elif result.metadata and "retry_chain" in result.metadata:
             retry_info = result.metadata["retry_chain"]
-            if retry_info.get("exhausted"):
-                attempts = retry_info.get("attempts", [])
-                error_msg += f"\n\nRetry chain exhausted after {len(attempts)} attempts:"
-                for attempt in attempts:
-                    error_msg += f"\n  - {attempt.get('strategy')}: {attempt.get('error', 'unknown')}"
+
+        if retry_info and retry_info.get("exhausted"):
+            attempts = retry_info.get("attempts", [])
+            error_msg += f"\n\nRetry chain exhausted after {len(attempts)} attempts:"
+            for attempt in attempts:
+                error_msg += f"\n  - {attempt.get('strategy')}: {attempt.get('error', 'unknown')}"
 
         return {
             "content": [{"type": "text", "text": error_msg}],

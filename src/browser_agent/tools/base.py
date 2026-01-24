@@ -86,7 +86,7 @@ def _extract_action_description(func_name: str, args: tuple, kwargs: dict) -> Op
         Action description or None
     """
     # Common parameter names that contain action description
-    description_params = ["description", "text", "selector", "query"]
+    description_params = ["description", "element_description", "text", "selector", "query"]
 
     # Check kwargs first
     for param in description_params:

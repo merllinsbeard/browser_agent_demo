@@ -7,6 +7,7 @@ Collection of tools for browser interaction:
 - Type (FR-008)
 - Scroll (FR-009)
 - Wait (FR-010)
+- Frame Management (002-iframe-interaction-fixes)
 """
 
 from .navigation import (
@@ -41,6 +42,11 @@ from .interactions import (
     hover,
     select_option,
 )
+from .frames import (
+    list_frames,
+    get_frame_content,
+    switch_to_frame,
+)
 from .base import ToolResult, tool, get_tool, get_all_tools, get_tool_schemas
 
 __all__ = [
@@ -71,6 +77,10 @@ __all__ = [
     "scroll",
     "hover",
     "select_option",
+    # Frames (002-iframe-interaction-fixes)
+    "list_frames",
+    "get_frame_content",
+    "switch_to_frame",
     # Base
     "ToolResult",
     "tool",

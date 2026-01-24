@@ -17,6 +17,8 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
+from browser_agent.config import configure_logging
+
 # Load environment variables
 load_dotenv()
 
@@ -352,11 +354,12 @@ def main():
     """Main entry point."""
     args = parse_args()
 
-    # Setup logging for dev mode
+    # Setup logging based on dev mode or LOG_LEVEL env var
     if args.dev:
         import logging
-        logging.basicConfig(level=logging.DEBUG)
-        os.environ.setdefault("LOG_LEVEL", "DEBUG")
+        configure_logging(level=logging.DEBUG, verbose=True)
+    else:
+        configure_logging()
 
     # Interactive mode if no task provided
     if not args.task:

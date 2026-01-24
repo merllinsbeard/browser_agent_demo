@@ -147,7 +147,7 @@
 - [x] T049 [P] Update CLAUDE.md with SDK-based architecture documentation
 - [x] T050 [P] Remove ReActPlanner and LLMProvider references from documentation
 - [ ] T051 [P] Create examples/ directory with example usage scripts
-- [ ] T052 [P] Add logging configuration via LOG_LEVEL environment variable
+- [x] T052 [P] Add logging configuration via LOG_LEVEL environment variable
 - [ ] T053 [P] Add --dev flag for development mode with auto-reload
 - [ ] T054 [P] Update README.md with SDK-based quickstart instructions
 - [ ] T055 Run quickstart.md validation examples to ensure they work

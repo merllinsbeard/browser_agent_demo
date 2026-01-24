@@ -209,7 +209,7 @@ def _build_retry_strategies(
     """
     if explicit_frame:
         # Only try the specified frame
-        return [f"frame:{explicit_frame}"]
+        return [f"iframe:{explicit_frame}"]
 
     # Build prioritized frame list
     strategies = ["main_frame"]

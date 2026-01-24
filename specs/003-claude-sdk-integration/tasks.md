@@ -148,8 +148,8 @@
 - [x] T050 [P] Remove ReActPlanner and LLMProvider references from documentation
 - [x] T051 [P] Create examples/ directory with example usage scripts
 - [x] T052 [P] Add logging configuration via LOG_LEVEL environment variable
-- [ ] T053 [P] Add --dev flag for development mode with auto-reload
-- [ ] T054 [P] Update README.md with SDK-based quickstart instructions
+- [x] T053 [P] Add --dev flag for development mode with auto-reload
+- [x] T054 [P] Update README.md with SDK-based quickstart instructions
 - [ ] T055 Run quickstart.md validation examples to ensure they work
 - [x] T056 [P] Add type hints to all new SDK integration code
 - [x] T057 [P] Add docstrings to all public functions in src/browser_agent/sdk_adapter.py

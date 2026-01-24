@@ -67,15 +67,15 @@
 
 ### Implementation for User Story 1
 
-- [ ] T020 [P] [US1] Wire up browser_server in ClaudeAgentOptions.mcp_servers in src/browser_agent/agents/orchestrator.py
-- [ ] T021 [P] [US1] Configure allowed_tools with all 23 browser tools in src/browser_agent/agents/orchestrator.py
-- [ ] T022 [US1] Implement main query loop in src/browser_agent/main.py using ClaudeSDKClient
-- [ ] T023 [P] [US1] Add CLI argument parser in src/browser_agent/main.py (--verbose, --model, --start-url, --headless)
-- [ ] T024 [P] [US1] Implement message output handler for AssistantMessage in src/browser_agent/tui/display.py
-- [ ] T025 [US1] Integrate security confirmation flow in SDK tool execution path (src/browser_agent/sdk_adapter.py)
+- [x] T020 [P] [US1] Wire up browser_server in ClaudeAgentOptions.mcp_servers in src/browser_agent/agents/orchestrator.py
+- [x] T021 [P] [US1] Configure allowed_tools with all 23 browser tools in src/browser_agent/agents/orchestrator.py
+- [x] T022 [US1] Implement main query loop in src/browser_agent/main.py using ClaudeSDKClient
+- [x] T023 [P] [US1] Add CLI argument parser in src/browser_agent/main.py (--verbose, --model, --start-url, --headless)
+- [x] T024 [P] [US1] Implement message output handler for AssistantMessage in src/browser_agent/tui/display.py
+- [x] T025 [US1] Integrate security confirmation flow in SDK tool execution path (src/browser_agent/sdk_adapter.py)
 - [ ] T026 [US1] Test end-to-end simple task: navigate to example.com and click first button
 - [ ] T027 [US1] Test iframe handling: navigate to page with search iframe and interact with element
-- [ ] T028 [US1] Verify 80 existing tests still pass after SDK integration
+- [x] T028 [US1] Verify 80 existing tests still pass after SDK integration (119 passed)
 
 **Checkpoint**: User Story 1 complete - simple automation tasks work via natural language
 

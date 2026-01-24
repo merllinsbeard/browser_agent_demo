@@ -223,7 +223,7 @@ Always:
             ConversationSession instance
 
         Example:
-            >>> async with orchestrator.create_session() as session:
+            >>> async with await orchestrator.create_session() as session:
             ...     async for msg in session.query("Navigate to example.com"):
             ...         print(msg)
             ...     async for msg in session.query("Click the first link"):

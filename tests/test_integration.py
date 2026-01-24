@@ -18,7 +18,6 @@ import pytest
 from browser_agent.browser import BrowserController, BrowserConfig
 from browser_agent.tools import navigate, get_accessibility_tree, get_page_text
 from browser_agent.tools.interactions import type_text
-from browser_agent.agents.planner import create_planner
 from browser_agent.agents.executor import create_executor
 from browser_agent.tui import get_console
 
@@ -266,26 +265,8 @@ async def test_executor_creation_speed():
 
 
 # ============================================================================
-# Planner integration test
+# Note: Planner tests removed - SDK now handles ReAct loop
 # ============================================================================
-
-
-@pytest.mark.asyncio
-async def test_planner_initialization():
-    """
-    Test planner can be initialized with mock LLM.
-    """
-    async def mock_llm(prompt: str, messages: list) -> dict:
-        return {"content": "<thought>Test thought</thought>\n<action>navigate</action>"}
-
-    planner = create_planner(
-        llm_complete=mock_llm,
-        max_iterations=1,
-        verbose=False,
-    )
-
-    assert planner is not None
-    assert planner.config.max_iterations == 1
 
 
 # ============================================================================

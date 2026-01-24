@@ -29,6 +29,7 @@ from browser_agent.tui.action import (
     print_action,
     print_interaction,
     print_navigation,
+    print_subagent_delegation,
     print_tool_call,
 )
 from browser_agent.tui.result import (
@@ -39,6 +40,7 @@ from browser_agent.tui.result import (
     print_extracted_text,
     print_page_info,
     print_result,
+    print_subagent_result,
 )
 from browser_agent.tui.progress import (
     ActionProgress,
@@ -66,6 +68,7 @@ __all__ = [
     "print_action",
     "print_interaction",
     "print_navigation",
+    "print_subagent_delegation",
     "print_tool_call",
     # Result block functions (FR-005)
     "print_code_result",
@@ -75,6 +78,7 @@ __all__ = [
     "print_extracted_text",
     "print_page_info",
     "print_result",
+    "print_subagent_result",
     # Progress indicators (T020)
     "ActionProgress",
     "StepTracker",

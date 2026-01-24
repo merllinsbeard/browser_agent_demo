@@ -13,8 +13,8 @@ from .provider import LLMConfig, LLMProvider, ModelTier
 from .anthropic_provider import AnthropicProvider
 from .openai_compatible_provider import OpenAICompatibleProvider
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (override shell env with .env values)
+load_dotenv(override=True)
 
 
 def create_provider_from_env() -> LLMProvider:

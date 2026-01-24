@@ -5,9 +5,10 @@ This document contains project-specific instructions for Claude AI agents workin
 ## Project Overview
 
 The browser automation agent uses Playwright to interact with web pages, with special support for:
-- **iframe interactions** (Feature 002)
-- **Security and user confirmation** for destructive actions (Feature 003)
-- **Multi-agent architecture** with ReAct planning loop
+- **Claude Agent SDK integration** for AI-powered browser automation (Feature 003)
+- **iframe interactions** with cross-frame element discovery (Feature 002)
+- **Security and user confirmation** for destructive actions
+- **Multi-agent architecture** powered by Claude Agent SDK
 
 Modern sites often embed content in iframes (search widgets, ads, payment forms), which requires special handling. Additionally, certain actions like deletions, payments, or form submissions require explicit user confirmation for safety.
 
@@ -17,13 +18,38 @@ Modern sites often embed content in iframes (search widgets, ads, payment forms)
 
 ```
 src/browser_agent/
-├── agents/              # 4-agent hierarchy (Planner, DOM Analyzer, Executor, Validator)
+├── agents/              # Agent orchestration (Claude SDK integration)
+│   ├── orchestrator.py  # AgentOrchestrator with ClaudeSDKClient
+│   └── definitions.py   # AgentDefinition configs (planner, executor, etc.)
 ├── browser/             # Playwright wrapper (BrowserController, SessionManager)
 ├── tools/               # Tool registry with @tool decorator pattern
-├── llm/                 # LLM provider abstraction (Anthropic, OpenAI-compatible)
+├── sdk_adapter.py       # SDK adapter layer (MCP server, tool conversion)
+├── main.py              # CLI entry point for browser automation
 ├── security/            # Destructive action detection and user confirmation
 └── tui/                 # Rich terminal UI for agent output
 ```
+
+### Claude Agent SDK Architecture
+
+The agent uses Claude Agent SDK for AI-powered browser automation:
+
+```python
+# SDK adapter creates MCP server with 23 browser tools
+from browser_agent.sdk_adapter import create_browser_server, get_allowed_tools
+
+# Orchestrator wraps SDK with browser lifecycle
+from browser_agent.agents.orchestrator import create_orchestrator
+
+async with create_orchestrator(headless=True) as orchestrator:
+    async for message in orchestrator.execute_task_stream(task):
+        print(message)
+```
+
+**Key Components**:
+- **sdk_adapter.py**: Adapts existing @tool functions for SDK compatibility
+- **AgentOrchestrator**: Manages browser lifecycle and SDK client
+- **MCP Server**: Exposes browser tools via Model Context Protocol
+- **Agent Definitions**: Configures planner, executor, dom_analyzer, validator agents
 
 ### Tool Registry Pattern
 
@@ -499,7 +525,26 @@ frames = await _wait_for_dynamic_iframes(page, expected_count=3)
 ```bash
 # LLM Provider
 ANTHROPIC_API_KEY=sk-ant-...
-LLM_PROVIDER=anthropic              # or "openai_compatible"
+
+### OpenRouter Configuration (Alternative)
+
+To use OpenRouter instead of direct Anthropic API:
+
+```bash
+# In .env
+ANTHROPIC_BASE_URL=https://openrouter.ai/api
+ANTHROPIC_AUTH_TOKEN=sk-or-v1-your-openrouter-key
+ANTHROPIC_API_KEY=  # Leave empty
+```
+
+OpenRouter provides Anthropic-compatible API endpoint for Claude Agent SDK.
+
+**Model Selection**: OpenRouter maps model aliases automatically:
+- `sonnet` → `anthropic/claude-3.5-sonnet` (or latest)
+- `opus` → `anthropic/claude-3-opus` (or latest)
+- `haiku` → `anthropic/claude-3-haiku` (or latest)
+
+You can also specify full model names like `google/gemini-2-flash` or `meta-llama/llama-3.1-70b`.
 
 # Model Selection
 MODEL_SONNET=claude-sonnet-4-20250514      # High-quality reasoning
@@ -682,6 +727,15 @@ uv run pytest tests/ --cov=src/browser_agent --cov-report=html
 - ✅ Unit tests for detector and confirmation
 - ✅ Integration tests for security flow
 
+**Feature 004 - Claude SDK Integration**: 🚧 In Progress
+- ✅ Phase 1 (Setup): SDK dependencies and configuration
+- ✅ Phase 2 (Foundational): SDK adapter, agent definitions, orchestrator
+- ✅ T025: Security checks integrated with SDK adapter
+- ✅ T036-T039 (US3): Error handling (from iframe feature)
+- ✅ T043-T044 (US4): Security integration verified
+- 🕐 T026-T027, T040-T042, T045-T048: Manual E2E validation pending
+- 🕐 Phase 7 (Polish): Documentation and cleanup tasks
+
 **Project Cleanup** (Jan 2026): ✅ Complete
 - ✅ Removed dead code (burger scripts, main.py placeholder)
 - ✅ Cleaned git history of exposed API keys
@@ -690,7 +744,14 @@ uv run pytest tests/ --cov=src/browser_agent --cov-report=html
 
 ## See Also
 
+- `specs/003-claude-sdk-integration/tasks.md` - SDK integration task checklist
 - `specs/002-iframe-interaction-fixes/spec.md` - Iframe feature specification
-- `specs/002-iframe-interaction-fixes/plan.md` - Implementation plan
-- `specs/002-iframe-interaction-fixes/tasks.md` - Task checklist
+- `specs/002-iframe-interaction-fixes/tasks.md` - Iframe task checklist
 - `README.md` - Project documentation
+
+## Active Technologies
+- Python 3.11+ + Claude Agent SDK (anthropic-agent-sdk), Playwright (playwright), Rich (terminal UI) (003-claude-sdk-integration)
+- N/A (browser session persistence via user_data_dir only) (003-claude-sdk-integration)
+
+## Recent Changes
+- 003-claude-sdk-integration: Added Python 3.11+ + Claude Agent SDK (anthropic-agent-sdk), Playwright (playwright), Rich (terminal UI)

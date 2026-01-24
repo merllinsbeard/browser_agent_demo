@@ -86,7 +86,7 @@ def _extract_action_description(func_name: str, args: tuple, kwargs: dict) -> Op
         Action description or None
     """
     # Common parameter names that contain action description
-    description_params = ["description", "text", "selector", "query"]
+    description_params = ["description", "element_description", "text", "selector", "query"]
 
     # Check kwargs first
     for param in description_params:
@@ -171,15 +171,6 @@ def tool(
     """
 
     def decorator(func: Callable) -> Callable:
-        # Store tool metadata
-        _TOOL_REGISTRY[name] = {
-            "name": name,
-            "description": description,
-            "parameters": parameters or {},
-            "function": func,
-            "security_check": security_check,
-        }
-
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # Security check if enabled
@@ -242,6 +233,15 @@ def tool(
         wrapper.tool_description = description
         wrapper.tool_parameters = parameters
         wrapper.security_check = security_check
+
+        # Store tool metadata in registry (with wrapper for security)
+        _TOOL_REGISTRY[name] = {
+            "name": name,
+            "description": description,
+            "parameters": parameters or {},
+            "function": wrapper,  # Store wrapper to preserve security checks
+            "security_check": security_check,
+        }
 
         return wrapper
 

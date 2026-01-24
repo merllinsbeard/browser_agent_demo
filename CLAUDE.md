@@ -4,7 +4,45 @@ This document contains project-specific instructions for Claude AI agents workin
 
 ## Project Overview
 
-The browser automation agent uses Playwright to interact with web pages, with special support for **iframe interactions**. Modern sites often embed content in iframes (search widgets, ads, payment forms), which requires special handling.
+The browser automation agent uses Playwright to interact with web pages, with special support for:
+- **iframe interactions** (Feature 002)
+- **Security and user confirmation** for destructive actions (Feature 003)
+- **Multi-agent architecture** with ReAct planning loop
+
+Modern sites often embed content in iframes (search widgets, ads, payment forms), which requires special handling. Additionally, certain actions like deletions, payments, or form submissions require explicit user confirmation for safety.
+
+## Architecture Overview
+
+### Component Structure
+
+```
+src/browser_agent/
+├── agents/              # 4-agent hierarchy (Planner, DOM Analyzer, Executor, Validator)
+├── browser/             # Playwright wrapper (BrowserController, SessionManager)
+├── tools/               # Tool registry with @tool decorator pattern
+├── llm/                 # LLM provider abstraction (Anthropic, OpenAI-compatible)
+├── security/            # Destructive action detection and user confirmation
+└── tui/                 # Rich terminal UI for agent output
+```
+
+### Tool Registry Pattern
+
+All browser automation tools use the `@tool` decorator for registration:
+
+```python
+from .base import tool, ToolResult
+
+@tool(
+    name="click",
+    description="Click an element on the page",
+    parameters={...},
+)
+async def click(page: Page, description: str, ...) -> ToolResult:
+    # Implementation
+    return ToolResult(success=True, data={...})
+```
+
+**Security Integration**: Tools that perform destructive actions (click, type_text) automatically invoke the security module for action classification and user confirmation.
 
 ## Iframe Interaction System (Feature 002)
 
@@ -274,6 +312,144 @@ State machine for retry strategies:
 - `add_attempt()` - Record attempt result
 - `to_error_dict()` - Convert to error response (FR-019)
 
+## Security System (Feature 003)
+
+### Overview
+
+The security system protects against unintended destructive actions by:
+1. **Detecting** potentially dangerous actions (deletions, payments, form submissions)
+2. **Blocking** high-risk actions (password/MFA input)
+3. **Requesting confirmation** for medium-risk actions
+
+### DestructiveActionDetector (`src/browser_agent/security/detector.py`)
+
+Classifies actions based on description and element context:
+
+```python
+from browser_agent.security.detector import DestructiveActionDetector
+
+detector = DestructiveActionDetector()
+security_check = detector.check_action(
+    action_description="Delete account",
+    element_context={"tag": "BUTTON", "text": "Delete"},
+    page_context={"url": "https://example.com/settings"}
+)
+
+if security_check.requires_confirmation:
+    # Ask user for confirmation
+    pass
+```
+
+**Action Types**:
+- `ActionType.SAFE` - No confirmation needed
+- `ActionType.DELETE` - Delete/remove/clear actions
+- `ActionType.SEND` - Submit/send/publish actions
+- `ActionType.PAYMENT` - Pay/checkout/purchase actions
+- `ActionType.PASSWORD` - **BLOCKED** - Password input
+- `ActionType.MFA` - **BLOCKED** - MFA/OTP input
+
+**Detection Patterns**:
+
+| Category | Patterns (examples) |
+|----------|---------------------|
+| Delete | delete, remove, erase, clear, destroy, forget |
+| Send | send, submit, post, publish, transfer, reply |
+| Payment | pay, buy, purchase, checkout, order, subscribe |
+| Password | password, passwd, passcode, secret (blocked) |
+| MFA | otp, code, verification, authenticator (blocked) |
+
+**SecurityCheck Response**:
+```python
+{
+    "action_type": ActionType.DELETE,
+    "requires_confirmation": True,
+    "is_blocked": False,
+    "confidence": 0.9,
+    "matched_patterns": ["delete"],
+    "confirmation_prompt": "This will delete an item. Continue?"
+}
+```
+
+### UserConfirmation (`src/browser_agent/security/confirmation.py`)
+
+Rich terminal UI for user confirmations:
+
+```python
+from browser_agent.security.confirmation import UserConfirmation
+
+confirmation = UserConfirmation()
+
+# Request confirmation for destructive action
+result, user_response = confirmation.confirm_action(
+    action_description="Delete account",
+    action_type="DELETE",
+    details={"url": "https://example.com/settings"},
+    prompt="This action cannot be undone. Continue?"
+)
+
+if result == ConfirmationResult.CONFIRMED:
+    # Proceed with action
+    pass
+```
+
+**Confirmation Types**:
+- `ConfirmationResult.CONFIRMED` - User approved the action
+- `ConfirmationResult.DENIED` - User rejected the action
+- `ConfirmationResult.CANCELLED` - User cancelled (Ctrl+C)
+
+**Manual Input Request** (for CAPTCHA, login, etc.):
+```python
+success = confirmation.request_manual_input(
+    message="Please complete the CAPTCHA",
+    wait_message="Press Enter when done..."
+)
+```
+
+**Blocked Action Display**:
+```python
+confirmation.show_blocked_action(
+    reason="Password input is not allowed for security reasons",
+    suggestion="Please enter passwords manually"
+)
+```
+
+### Tool Integration
+
+Security is integrated via the `@tool` decorator in `src/browser_agent/tools/base.py`:
+
+```python
+@tool(
+    name="click",
+    description="Click an element on the page",
+    security_check=True,  # Enables security for this tool
+)
+async def click(page: Page, description: str, ...) -> ToolResult:
+    # Security check runs automatically before tool execution
+    # - Action classified by DestructiveActionDetector
+    # - User confirmation requested if needed
+    # - Blocked actions return error without executing
+    ...
+```
+
+**Tools with Security Enabled**:
+- `click` - Checks button/link text for destructive patterns
+- `type_text` - Checks input description for password/MFA patterns
+
+**Tools without Security** (safe operations):
+- `navigate` - Navigation only
+- `scroll` - View manipulation only
+- `wait` - Passive waiting only
+
+### Configuration
+
+Environment variables (`.env`):
+```bash
+# Security settings
+SECURITY_CONFIRMATION_ENABLED=true    # Enable user confirmations (default: true)
+SECURITY_BLOCK_PASSWORD_INPUT=true    # Block password/MFA input (default: true)
+SECURITY_CONFIDENCE_THRESHOLD=0.5     # Minimum confidence for confirmation
+```
+
 ## Cross-Origin Frame Handling (FR-027)
 
 **Same-Origin Policy**: Cross-origin iframes are inaccessible due to browser security.
@@ -321,9 +497,23 @@ frames = await _wait_for_dynamic_iframes(page, expected_count=3)
 ### Environment Variables (`.env`)
 
 ```bash
-# Iframe Configuration (to be added to .env.example per T036)
+# LLM Provider
+ANTHROPIC_API_KEY=sk-ant-...
+LLM_PROVIDER=anthropic              # or "openai_compatible"
+
+# Model Selection
+MODEL_SONNET=claude-sonnet-4-20250514      # High-quality reasoning
+MODEL_HAIKU=claude-haiku-4-20250514        # Fast lightweight tasks
+MODEL_OPUS=claude-opus-4-20250514          # Maximum quality
+
+# Iframe Configuration
 IFRAME_TIMEOUT_MS=10000       # Timeout per frame attempt (FR-020)
 IFRAME_WAIT_MS=5000           # Wait for dynamic iframes (FR-026)
+
+# Security Settings
+SECURITY_CONFIRMATION_ENABLED=true    # Enable user confirmations
+SECURITY_BLOCK_PASSWORD_INPUT=true    # Block password/MFA input
+SECURITY_CONFIDENCE_THRESHOLD=0.5     # Minimum confidence for confirmation
 ```
 
 ### Default Values
@@ -332,6 +522,7 @@ IFRAME_WAIT_MS=5000           # Wait for dynamic iframes (FR-026)
 - **Timeout Per Frame**: 10000ms (10s, FR-020)
 - **Dynamic Frame Wait**: 5000ms (5s, FR-026)
 - **Frame Polling Interval**: 500ms (FR-026)
+- **Security Confidence Threshold**: 0.5
 
 ## Best Practices
 
@@ -397,20 +588,26 @@ When multiple iframes exist, search order is:
 4. Frames with name (e.g., `"search-frame"`)
 5. Remaining frames by index (e.g., `1`, `2`)
 
+### 6. Security Best Practices
+
+- **Always** enable security for production use
+- **Never** disable password/MFA blocking for automated tasks
+- **Review** confirmation prompts before approving
+- **Test** destructive actions in a safe environment first
+
 ## Testing
 
 ### Unit Tests
 
-Located in `tests/unit/test_frame_tools.py`:
-- `TestRetryChainStateMachine` - RetryChain state machine tests (T029)
-- `TestStructuredErrorResponse` - Error response format tests (T030)
-- Frame content and switching tests (T027, T028)
+Located in `tests/unit/`:
+- `test_frame_tools.py` - RetryChain state machine (T029), error responses (T030), frame content (T027-T028)
+- `test_security.py` - DestructiveActionDetector, UserConfirmation
 
 ### Integration Tests
 
-Located in `tests/integration/test_iframes.py`:
-- `test_search_in_iframe` - Iframe search flow (T009)
-- `test_click_iframe_interception` - Click interception handling (T016)
+Located in `tests/integration/`:
+- `test_iframes.py` - Iframe search flow (T009), click interception (T016)
+- `test_security_integration.py` - Security flow with click/type_text tools
 
 ### Running Tests
 
@@ -421,12 +618,19 @@ uv run pytest tests/ -v
 # Frame tools only
 uv run pytest tests/unit/test_frame_tools.py -v
 
+# Security tests
+uv run pytest tests/unit/test_security.py -v
+
 # Integration tests
-uv run pytest tests/integration/test_iframes.py -v
+uv run pytest tests/integration/ -v
+
+# With coverage
+uv run pytest tests/ --cov=src/browser_agent --cov-report=html
 ```
 
 ## Feature Reference
 
+### Iframe Interactions (Feature 002)
 - **FR-001**: Frame enumeration with metadata
 - **FR-002**: Cross-origin detection
 - **FR-004**: Element search across all frames
@@ -452,23 +656,41 @@ uv run pytest tests/integration/test_iframes.py -v
 - **FR-026**: Dynamic iframe wait
 - **FR-027**: Cross-origin graceful handling
 
+### Security System (Feature 003)
+- **FR-028**: DestructiveActionDetector for action classification
+- **FR-029**: UserConfirmation with rich terminal UI
+- **FR-030**: Tool registry integration via @tool decorator
+- **FR-031**: Password/MFA input blocking
+- **FR-032**: Delete action detection and confirmation
+- **FR-033**: Send/submit action detection and confirmation
+- **FR-034**: Payment action detection and confirmation
+
 ## Implementation Status
 
-**Completed** (Phase 6 - User Story 4):
+**Feature 002 - Iframe Interactions**: ✅ Complete
 - ✅ T001-T034: All implementation tasks complete
 - ✅ RetryChain state machine
 - ✅ Structured error responses
 - ✅ Configurable timeouts
 - ✅ Frame metadata tracking
+- ✅ Cross-origin graceful handling
 
-**In Progress** (Phase 7 - Polish):
-- ⏳ T035: Update CLAUDE.md (this file)
-- ⏳ T036: Add iframe configuration to .env.example
-- ⏳ T037-T039: Validation and testing
+**Feature 003 - Security System**: ✅ Complete
+- ✅ DestructiveActionDetector implementation
+- ✅ UserConfirmation with rich terminal UI
+- ✅ Tool registry integration via @tool decorator
+- ✅ Unit tests for detector and confirmation
+- ✅ Integration tests for security flow
+
+**Project Cleanup** (Jan 2026): ✅ Complete
+- ✅ Removed dead code (burger scripts, main.py placeholder)
+- ✅ Cleaned git history of exposed API keys
+- ✅ Updated .gitignore with security rules
+- ✅ Removed non-existent Intelligent Button documentation
 
 ## See Also
 
-- `specs/002-iframe-interaction-fixes/spec.md` - Feature specification
+- `specs/002-iframe-interaction-fixes/spec.md` - Iframe feature specification
 - `specs/002-iframe-interaction-fixes/plan.md` - Implementation plan
 - `specs/002-iframe-interaction-fixes/tasks.md` - Task checklist
 - `README.md` - Project documentation

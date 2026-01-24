@@ -619,6 +619,7 @@ async def _find_element_in_all_frames(
         },
         "required": ["element_description"],
     },
+    security_check=True,  # FR-030: Enable security checking for destructive actions
 )
 async def click(
     page: Page,
@@ -944,6 +945,7 @@ async def click(
         },
         "required": ["element_description", "text"],
     },
+    security_check=True,  # FR-030: Enable security checking for destructive actions
 )
 async def type_text(
     page: Page,

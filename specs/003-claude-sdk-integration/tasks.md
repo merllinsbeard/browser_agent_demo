@@ -109,10 +109,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T036 [P] [US3] Implement cross-origin frame graceful skip in src/browser_agent/tools/interactions.py
-- [ ] T037 [P] [US3] Implement dynamic iframe wait polling in src/browser_agent/tools/frames.py
-- [ ] T038 [US3] Implement coordinate click fallback for overlay blocking in src/browser_agent/tools/interactions.py
-- [ ] T039 [P] [US3] Add retry chain logging for debugging in src/browser_agent/tools/interactions.py
+- [x] T036 [P] [US3] Implement cross-origin frame graceful skip in src/browser_agent/tools/interactions.py
+- [x] T037 [P] [US3] Implement dynamic iframe wait polling in src/browser_agent/tools/frames.py
+- [x] T038 [US3] Implement coordinate click fallback for overlay blocking in src/browser_agent/tools/interactions.py
+- [x] T039 [P] [US3] Add retry chain logging for debugging in src/browser_agent/tools/interactions.py
 - [ ] T040 [US3] Test cross-origin iframe handling (should skip gracefully with warning)
 - [ ] T041 [US3] Test dynamic iframe loading (should wait for frames before interaction)
 - [ ] T042 [US3] Test overlay blocking (should fall back to coordinate click)
@@ -129,8 +129,8 @@
 
 ### Implementation for User Story 4
 
-- [ ] T043 [P] [US4] Verify DestructiveActionDetector integration with SDK tools in src/browser_agent/sdk_adapter.py
-- [ ] T044 [P] [US4] Verify UserConfirmation prompts work in SDK context in src/browser_agent/security/confirmation.py
+- [x] T043 [P] [US4] Verify DestructiveActionDetector integration with SDK tools in src/browser_agent/sdk_adapter.py
+- [x] T044 [P] [US4] Verify UserConfirmation prompts work in SDK context in src/browser_agent/security/confirmation.py
 - [ ] T045 [US4] Test password blocking: `python -m browser_agent.main "Type password into login form"`
 - [ ] T046 [US4] Test delete confirmation: `python -m browser_agent.main "Click delete account button"`
 - [ ] T047 [US4] Test payment confirmation: `python -m browser_agent.main "Click checkout button"`
@@ -144,15 +144,15 @@
 
 **Purpose**: Final improvements across all user stories
 
-- [ ] T049 [P] Update CLAUDE.md with SDK-based architecture documentation
-- [ ] T050 [P] Remove ReActPlanner and LLMProvider references from documentation
+- [x] T049 [P] Update CLAUDE.md with SDK-based architecture documentation
+- [x] T050 [P] Remove ReActPlanner and LLMProvider references from documentation
 - [ ] T051 [P] Create examples/ directory with example usage scripts
 - [ ] T052 [P] Add logging configuration via LOG_LEVEL environment variable
 - [ ] T053 [P] Add --dev flag for development mode with auto-reload
 - [ ] T054 [P] Update README.md with SDK-based quickstart instructions
 - [ ] T055 Run quickstart.md validation examples to ensure they work
-- [ ] T056 [P] Add type hints to all new SDK integration code
-- [ ] T057 [P] Add docstrings to all public functions in src/browser_agent/sdk_adapter.py
+- [x] T056 [P] Add type hints to all new SDK integration code
+- [x] T057 [P] Add docstrings to all public functions in src/browser_agent/sdk_adapter.py
 - [ ] T058 Performance optimization: cache page state queries within agent loop
 - [ ] T059 Security audit: verify no hardcoded selectors or action sequences
 - [ ] T060 Final end-to-end test: complete multi-step task with all 4 user story features

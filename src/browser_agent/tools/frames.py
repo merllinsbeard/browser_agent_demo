@@ -180,8 +180,8 @@ async def _check_frame_accessible(frame: Frame) -> bool:
         True if frame is accessible, False for cross-origin
     """
     try:
-        # Try to access frame title - will fail for cross-origin
-        _ = frame.title
+        # Try to access frame url - will fail for cross-origin
+        _ = frame.url
         return True
     except Exception as e:
         # Cross-origin frame
@@ -204,9 +204,9 @@ def is_cross_origin_frame(frame: Frame) -> bool:
         ...     logger.warning(f"Skipping cross-origin iframe: {frame.name}")
     """
     try:
-        # Try to access frame properties - will fail for cross-origin
+        # Try to access frame url - will fail for cross-origin
+        # Note: frame.title is async in Playwright, so we only check frame.url
         _ = frame.url
-        _ = frame.title
         return False  # Same-origin
     except Exception as e:
         # Cross-origin frame detected

@@ -160,7 +160,7 @@ result = await click(page, "Search button", frame="search-frame")
 {
     "success": False,
     "error": "Failed to click after all retry strategies",
-    "error_data": {
+    "data": {
         "retry_chain": {
             "strategies": ["main_frame", "iframe:0", "iframe:1", "coordinate_click"],
             "attempts": [
@@ -369,7 +369,7 @@ result = await click(page, "Submit button", frame="payment-frame")
 When interactions fail, inspect the retry chain:
 ```python
 if not result.success:
-    retry_chain = result.error_data.get("retry_chain", {})
+    retry_chain = result.data.get("retry_chain", {})
     for attempt in retry_chain.get("attempts", []):
         print(f"Strategy: {attempt['strategy']}")
         print(f"  Success: {attempt['success']}")

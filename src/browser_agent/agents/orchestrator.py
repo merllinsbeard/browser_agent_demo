@@ -13,13 +13,11 @@ try:
     from claude_agent_sdk import (
         ClaudeAgentOptions,
         ClaudeSDKClient,
-        query,
     )
 except ImportError:
     # SDK not installed - will be installed via dependencies
     ClaudeAgentOptions = None
     ClaudeSDKClient = None
-    query = None
 
 from .definitions import get_all_agent_definitions
 from ..browser.controller import BrowserController, BrowserConfig
@@ -188,8 +186,10 @@ Always:
         await self.initialize()
 
         results = []
-        async for message in query(prompt=task, options=self._options):
-            results.append(message)
+        async with ClaudeSDKClient(options=self._options) as client:
+            await client.query(task)
+            async for message in client.receive_response():
+                results.append(message)
         return results
 
     async def execute_task_stream(
@@ -207,8 +207,10 @@ Always:
         """
         await self.initialize()
 
-        async for message in query(prompt=task, options=self._options):
-            yield message
+        async with ClaudeSDKClient(options=self._options) as client:
+            await client.query(task)
+            async for message in client.receive_response():
+                yield message
 
     async def close(self) -> None:
         """Close the orchestrator and release resources."""

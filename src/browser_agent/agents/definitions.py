@@ -7,44 +7,52 @@ Each agent has a specific role, model tier, and tool access pattern.
 Following FR-026: Sub-agents defined through AgentDefinition with model tiers.
 """
 
-from typing import Dict, Any
+from typing import Dict, Literal
+
+try:
+    from claude_agent_sdk.types import AgentDefinition
+except ImportError:
+    # Fallback if SDK not installed - should not happen in practice
+    AgentDefinition = None  # type: ignore
 
 # Model tier constants - SDK expects simplified tier names
-MODEL_SONNET = "sonnet"  # High-quality reasoning (claude-sonnet-4)
-MODEL_HAIKU = "haiku"    # Fast, lightweight (claude-haiku-4)
-MODEL_OPUS = "opus"      # Maximum quality (claude-opus-4)
+MODEL_SONNET: Literal["sonnet"] = "sonnet"  # High-quality reasoning (claude-sonnet-4)
+MODEL_HAIKU: Literal["haiku"] = "haiku"    # Fast, lightweight (claude-haiku-4)
+MODEL_OPUS: Literal["opus"] = "opus"      # Maximum quality (claude-opus-4)
 
 
 def _create_agent_definition(
     name: str,
     description: str,
     system_prompt: str,
-    model: str,
+    model: Literal["sonnet", "haiku", "opus"],
     tools: list[str] | None = None,
-) -> Dict[str, Any]:
+) -> AgentDefinition:
     """
     Create an AgentDefinition for Claude Agent SDK.
 
     Args:
-        name: Agent identifier
+        name: Agent identifier (not used in AgentDefinition, for documentation)
         description: What this agent does
         system_prompt: Agent's behavior instructions
-        model: Model tier to use (sonnet/haiku)
+        model: Model tier to use (sonnet/haiku/opus)
         tools: Tools this agent can use
 
     Returns:
-        AgentDefinition dictionary
+        AgentDefinition dataclass instance
     """
-    definition: Dict[str, Any] = {
-        "description": description,
-        "prompt": system_prompt,
-        "model": model,
-    }
+    if AgentDefinition is None:
+        raise ImportError(
+            "Claude Agent SDK not installed. "
+            "Install with: uv add claude-agent-sdk"
+        )
 
-    if tools is not None:
-        definition["tools"] = tools
-
-    return definition
+    return AgentDefinition(
+        description=description,
+        prompt=system_prompt,
+        model=model,
+        tools=tools,
+    )
 
 
 # ============================================================================
@@ -243,7 +251,7 @@ Key principles:
 # AGENT REGISTRY
 # ============================================================================
 
-AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
+AGENT_REGISTRY: Dict[str, AgentDefinition] = {
     "planner": PLANNER_AGENT,
     "dom_analyzer": DOM_ANALYZER_AGENT,
     "executor": EXECUTOR_AGENT,
@@ -251,7 +259,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
 }
 
 
-def get_agent_definition(agent_name: str) -> Dict[str, Any]:
+def get_agent_definition(agent_name: str) -> AgentDefinition:
     """
     Get an agent definition by name.
 
@@ -259,7 +267,7 @@ def get_agent_definition(agent_name: str) -> Dict[str, Any]:
         agent_name: One of "planner", "dom_analyzer", "executor", "validator"
 
     Returns:
-        AgentDefinition dictionary
+        AgentDefinition dataclass instance
 
     Raises:
         ValueError: If agent_name is not recognized
@@ -272,11 +280,11 @@ def get_agent_definition(agent_name: str) -> Dict[str, Any]:
     return AGENT_REGISTRY[agent_name]
 
 
-def get_all_agent_definitions() -> Dict[str, Dict[str, Any]]:
+def get_all_agent_definitions() -> Dict[str, AgentDefinition]:
     """
     Get all agent definitions for Claude Agent SDK configuration.
 
     Returns:
-        Dictionary mapping agent names to AgentDefinition dicts
+        Dictionary mapping agent names to AgentDefinition instances
     """
     return AGENT_REGISTRY.copy()

@@ -7,6 +7,7 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #5094 | 1:42 PM | 🔵 | Provider and Model Selection Architecture | ~318 |
 | #5016 | 1:34 PM | 🔵 | OpenRouter Model Usage Query | ~89 |
 | #5011 | 1:33 PM | 🔵 | OpenRouter Configuration Integration | ~267 |
 | #4996 | 1:32 PM | 🔵 | LLM Provider Architecture | ~250 |

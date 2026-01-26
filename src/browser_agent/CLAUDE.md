@@ -7,6 +7,8 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #5101 | 1:43 PM | 🔵 | Claude Agent SDK Architecture Analysis | ~272 |
+| #5093 | 1:42 PM | 🔵 | SDK Adapter Implementation Discovered | ~99 |
 | #5062 | 1:40 PM | 🔵 | SDK Adapter Analysis Complete | ~261 |
 | #5049 | 1:38 PM | 🔵 | SDK Adapter Implementation | ~262 |
 | #5042 | " | 🔵 | Bundled Directory Search | ~224 |
@@ -51,10 +53,4 @@
 | #4793 | " | 🔵 | Examples and Documentation | ~241 |
 | #4791 | " | ✅ | Language Switch Request | ~163 |
 | #4785 | " | 🟣 | CLI Entry Point Analysis | ~271 |
-| #4777 | 1:20 PM | 🔵 | Rich TUI Interface System | ~272 |
-| #4775 | " | 🔵 | SDK Adapter Agent Task Retrieved | ~81 |
-| #4771 | " | 🔵 | SDK Adapter Integration | ~253 |
-| #4768 | " | 🔵 | Agent Orchestrator Architecture | ~277 |
-| #4764 | 1:19 PM | 🔵 | SDK Adapter Agent Status Check | ~75 |
-| #4763 | " | 🔵 | Documentation Structure Analysis | ~206 |
 </claude-mem-context>

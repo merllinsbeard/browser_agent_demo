@@ -12,6 +12,7 @@ Implements user interaction tools for the browser automation agent:
 """
 
 import logging
+import os
 import time
 from typing import Literal, Optional, Union
 from playwright.async_api import Page, Frame, Locator, TimeoutError as PlaywrightTimeoutError
@@ -22,9 +23,13 @@ from .frames import (
     _prioritize_frames,
     _extract_frame_context,
     _check_frame_accessible,
+    _wait_for_dynamic_iframes,
 )
 
 logger = logging.getLogger(__name__)
+
+# Dynamic iframe wait configuration
+DEFAULT_IFRAME_WAIT_MS = int(os.getenv("IFRAME_WAIT_MS", "5000"))
 
 
 async def _find_element_by_description(
@@ -616,6 +621,14 @@ async def _find_element_in_all_frames(
                 "type": "integer",
                 "description": "Timeout for each frame attempt in milliseconds (default: 10000)",
             },
+            "wait_for_iframes": {
+                "type": "boolean",
+                "description": "Whether to wait for dynamically loaded iframes before searching (default: true)",
+            },
+            "iframe_wait_ms": {
+                "type": "integer",
+                "description": "Maximum time to wait for dynamic iframes in milliseconds (default: from IFRAME_WAIT_MS env var)",
+            },
         },
         "required": ["element_description"],
     },
@@ -629,6 +642,8 @@ async def click(
     right_click: bool = False,
     frame: Optional[str] = None,
     timeout_per_frame_ms: int = 10000,
+    wait_for_iframes: bool = True,
+    iframe_wait_ms: Optional[int] = None,
 ) -> ToolResult:
     """
     Click on an element with automatic iframe search and retry chain.
@@ -651,6 +666,16 @@ async def click(
     Returns:
         ToolResult indicating success or failure with frame_context and retry info
     """
+    # Wait for dynamically loaded iframes before building retry strategies
+    if wait_for_iframes and frame is None:
+        timeout = iframe_wait_ms or DEFAULT_IFRAME_WAIT_MS
+        initial_count = len(page.frames)
+        logger.info(f"[Dynamic Iframes] Waiting up to {timeout}ms for iframes (initial: {initial_count})")
+        await _wait_for_dynamic_iframes(page, timeout_ms=timeout)
+        final_count = len(page.frames)
+        if final_count > initial_count:
+            logger.info(f"[Dynamic Iframes] Found {final_count - initial_count} new frames")
+
     # Build retry strategies
     strategies = _build_retry_strategies(page, element_description, role, frame)
 
@@ -712,16 +737,34 @@ async def click(
                         },
                     )
                 else:
-                    # Record failed attempt
-                    retry_chain.add_attempt(
-                        strategy=strategy,
-                        success=False,
-                        duration_ms=duration_ms,
-                        error=error,
-                        frame_context=FrameContext(**frame_ctx),
+                    # Check for iframe interception
+                    should_skip, enhanced_error = await _check_and_handle_interception(
+                        page, element_description, role, retry_chain,
+                        strategy, error, duration_ms, FrameContext(**frame_ctx)
                     )
-                    logger.warning(f"[Retry Chain] Strategy '{strategy}' failed: {error}")
-                    retry_chain.advance()
+
+                    if should_skip:
+                        # Record attempt with interception info
+                        retry_chain.add_attempt(
+                            strategy=f"{strategy}_interception_detected",
+                            success=False,
+                            duration_ms=duration_ms,
+                            error=enhanced_error,
+                            frame_context=FrameContext(**frame_ctx),
+                        )
+                        # Skip to coordinate_click
+                        retry_chain.advance_to_strategy("coordinate_click")
+                    else:
+                        # Record failed attempt
+                        retry_chain.add_attempt(
+                            strategy=strategy,
+                            success=False,
+                            duration_ms=duration_ms,
+                            error=error,
+                            frame_context=FrameContext(**frame_ctx),
+                        )
+                        logger.warning(f"[Retry Chain] Strategy '{strategy}' failed: {error}")
+                        retry_chain.advance()
                     continue
 
             elif strategy.startswith("iframe:"):
@@ -790,16 +833,34 @@ async def click(
                         },
                     )
                 else:
-                    # Record failed attempt
-                    retry_chain.add_attempt(
-                        strategy=strategy,
-                        success=False,
-                        duration_ms=duration_ms,
-                        error=error,
-                        frame_context=frame_ctx,
+                    # Check for iframe interception
+                    should_skip, enhanced_error = await _check_and_handle_interception(
+                        page, element_description, role, retry_chain,
+                        strategy, error, duration_ms, frame_ctx
                     )
-                    logger.warning(f"[Retry Chain] Strategy '{strategy}' failed: {error}")
-                    retry_chain.advance()
+
+                    if should_skip:
+                        # Record attempt with interception info
+                        retry_chain.add_attempt(
+                            strategy=f"{strategy}_interception_detected",
+                            success=False,
+                            duration_ms=duration_ms,
+                            error=enhanced_error,
+                            frame_context=frame_ctx,
+                        )
+                        # Skip to coordinate_click
+                        retry_chain.advance_to_strategy("coordinate_click")
+                    else:
+                        # Record failed attempt
+                        retry_chain.add_attempt(
+                            strategy=strategy,
+                            success=False,
+                            duration_ms=duration_ms,
+                            error=error,
+                            frame_context=frame_ctx,
+                        )
+                        logger.warning(f"[Retry Chain] Strategy '{strategy}' failed: {error}")
+                        retry_chain.advance()
                     continue
 
             elif strategy == "coordinate_click":
@@ -942,6 +1003,14 @@ async def click(
                 "type": "integer",
                 "description": "Timeout for each frame attempt in milliseconds (default: 10000)",
             },
+            "wait_for_iframes": {
+                "type": "boolean",
+                "description": "Whether to wait for dynamically loaded iframes before searching (default: true)",
+            },
+            "iframe_wait_ms": {
+                "type": "integer",
+                "description": "Maximum time to wait for dynamic iframes in milliseconds (default: from IFRAME_WAIT_MS env var)",
+            },
         },
         "required": ["element_description", "text"],
     },
@@ -955,6 +1024,8 @@ async def type_text(
     press_enter: bool = False,
     frame: Optional[str] = None,
     timeout_per_frame_ms: int = 10000,
+    wait_for_iframes: bool = True,
+    iframe_wait_ms: Optional[int] = None,
 ) -> ToolResult:
     """
     Type text into an input field with automatic iframe search and retry chain.
@@ -977,6 +1048,16 @@ async def type_text(
     Returns:
         ToolResult indicating success or failure with frame_context and retry info
     """
+    # Wait for dynamically loaded iframes before building retry strategies
+    if wait_for_iframes and frame is None:
+        timeout = iframe_wait_ms or DEFAULT_IFRAME_WAIT_MS
+        initial_count = len(page.frames)
+        logger.info(f"[Dynamic Iframes] Waiting up to {timeout}ms for iframes (initial: {initial_count})")
+        await _wait_for_dynamic_iframes(page, timeout_ms=timeout)
+        final_count = len(page.frames)
+        if final_count > initial_count:
+            logger.info(f"[Dynamic Iframes] Found {final_count - initial_count} new frames")
+
     # Build retry strategies (note: type_text doesn't use coordinate_click fallback)
     strategies = _build_retry_strategies(page, element_description, None, frame)
     # Remove coordinate_click from strategies for type_text
@@ -1516,3 +1597,72 @@ async def coordinate_click(
             error=f"Coordinate click failed: {e!s}",
             metadata={"method": "coordinate_click"},
         )
+
+
+async def _check_and_handle_interception(
+    page: Page,
+    element_description: str,
+    role: Optional[str],
+    retry_chain: RetryChain,
+    strategy: str,
+    error: Optional[str],
+    duration_ms: int,
+    frame_ctx: Optional[FrameContext],
+) -> tuple[bool, Optional[str]]:
+    """
+    Check if iframe interception occurred and handle appropriately.
+
+    When a click fails, this function checks if an iframe overlay is blocking
+    the element. If interception is detected, it returns True to indicate that
+    the retry chain should skip directly to coordinate_click.
+
+    Args:
+        page: Playwright Page instance
+        element_description: Description of the element being clicked
+        role: Optional ARIA role filter
+        retry_chain: The current retry chain
+        strategy: The strategy that just failed
+        error: The error message from the failed attempt
+        duration_ms: Time taken for the failed attempt
+        frame_ctx: Frame context from the failed attempt
+
+    Returns:
+        Tuple of (should_skip_to_coordinate, enhanced_error_message)
+        - should_skip_to_coordinate: True if interception detected, False otherwise
+        - enhanced_error_message: Original error or interception-specific message
+    """
+    if not error or "timeout" not in error.lower():
+        return False, error
+
+    # Try to find the element for interception detection
+    locator = None
+    try:
+        if strategy == "main_frame":
+            locator, _ = await _find_element_by_description(page, element_description, role)
+        elif strategy.startswith("iframe:") and frame_ctx:
+            # For iframe attempts, find element in that frame
+            frame_index = frame_ctx.index
+            if frame_index < len(page.frames):
+                locator, _ = await _find_element_by_description(
+                    page.frames[frame_index],
+                    element_description,
+                    role
+                )
+    except Exception:
+        pass
+
+    if not locator:
+        return False, error
+
+    # Check for iframe interception
+    blocking_frame = await _detect_iframe_interception(page, locator)
+
+    if blocking_frame:
+        logger.warning(
+            f"[Frame Interception] Click blocked by iframe "
+            f"'{blocking_frame.name or blocking_frame.aria_label}'. "
+            f"Skipping to coordinate_click."
+        )
+        return True, f"Element blocked by iframe: {blocking_frame.name or blocking_frame.aria_label}"
+
+    return False, error

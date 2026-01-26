@@ -165,6 +165,19 @@ class RetryChain(BaseModel):
         """Advance to the next strategy in the chain."""
         self.current_index += 1
 
+    def advance_to_strategy(self, strategy_name: str) -> None:
+        """Advance directly to a specific strategy by name.
+
+        Args:
+            strategy_name: The name of the strategy to advance to (e.g., "coordinate_click")
+
+        Raises:
+            ValueError: If strategy_name is not in the strategies list
+        """
+        if strategy_name not in self.strategies:
+            raise ValueError(f"Strategy '{strategy_name}' not found in retry chain. Available strategies: {self.strategies}")
+        self.current_index = self.strategies.index(strategy_name)
+
     def add_attempt(
         self,
         strategy: str,
